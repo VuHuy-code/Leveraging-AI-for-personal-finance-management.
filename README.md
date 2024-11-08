@@ -9,3 +9,5 @@ mkdir
 cd
 cd..
 
+git branch <tên>
+git checkout <tên>
