@@ -1,10 +1,10 @@
-from transformers import BertTokenizer, BertForSequenceClassification
+from transformers import DistilBertTokenizer, DistilBertForSequenceClassification
 import torch
 import pickle
 
-# Tải mô hình và tokenizer
-model = BertForSequenceClassification.from_pretrained("../models/chi_tieu_model")
-tokenizer = BertTokenizer.from_pretrained("../models/chi_tieu_model")
+# Tải mô hình và tokenizer đã tối ưu hóa
+model = DistilBertForSequenceClassification.from_pretrained("../models/optimized_distilbert")
+tokenizer = DistilBertTokenizer.from_pretrained("../models/optimized_distilbert")
 
 # Tải label encoder
 with open("../data/label_encoder.pkl", "rb") as f:
@@ -19,6 +19,6 @@ def predict_category(description):
     return label_encoder.inverse_transform([predicted_class])[0]
 
 # Thử nghiệm với một mô tả mới
-description = "Go to the zoo"
+description = "Mua sắm thực phẩm tại siêu thị"
 predicted_category = predict_category(description)
 print("Loại chi tiêu dự đoán:", predicted_category)
