@@ -1,162 +1,36 @@
-/* src/App.css */
+/* Thêm vào cuối file */
 
-/* Toàn bộ ứng dụng */
-body {
-  font-family: 'Inter', sans-serif;
-  background-color: #f7f7f7;
-  margin: 0;
-  padding: 0;
+.dashboard-card {
+  @apply bg-gray-800 p-6 rounded-xl transition-all duration-300;
 }
 
-/* Header */
-header {
-  background: linear-gradient(90deg, #4e73df, #224abe);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+.dashboard-card:hover {
+  @apply transform scale-105 shadow-lg;
 }
 
-header h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
+.stat-value {
+  @apply text-2xl font-bold text-white;
 }
 
-nav ul {
-  list-style-type: none;
+.stat-label {
+  @apply text-gray-400 text-sm;
 }
 
-nav ul li a {
-  font-size: 1.125rem;
-  color: white;
-  padding: 8px 16px;
-  transition: color 0.3s ease-in-out;
+.chart-container {
+  @apply bg-gray-800 p-6 rounded-xl;
+  min-height: 300px;
 }
 
-nav ul li a:hover {
-  color: #a5b5f3;
-  text-decoration: underline;
+.action-button {
+  @apply bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center 
+         hover:bg-blue-700 transition-colors duration-300;
 }
 
-/* About Section */
-#about {
-  background-color: #ffffff;
-  padding: 6rem 2rem;
+.sidebar-link {
+  @apply flex items-center p-3 rounded-lg text-white hover:bg-gray-700 
+         transition-colors duration-200;
 }
 
-#about h2 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #1d3557;
-}
-
-#about p {
-  font-size: 1.125rem;
-  color: #555555;
-  line-height: 1.75;
-  margin-top: 1rem;
-}
-
-#about a {
-  background-color: #4e73df;
-  color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 1.125rem;
-  font-weight: 600;
-  transition: background-color 0.3s ease;
-}
-
-#about a:hover {
-  background-color: #224abe;
-}
-
-/* Features Section */
-#features {
-  background-color: #f4f8fc;
-  padding: 6rem 2rem;
-}
-
-#features h2 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #1d3557;
-  margin-bottom: 2rem;
-}
-
-.feature-item {
-  background-color: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 2.5rem;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.feature-item:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
-}
-
-.feature-item h3 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #1d3557;
-}
-
-.feature-item p {
-  font-size: 1rem;
-  color: #555555;
-  line-height: 1.5;
-  margin-top: 1rem;
-}
-
-/* Footer */
-footer {
-  background-color: #4e73df;
-  color: white;
-  padding: 2rem 2rem;
-  text-align: center;
-}
-
-footer a {
-  color: white;
-  font-weight: 600;
-  transition: color 0.3s ease;
-  margin: 0 1rem;
-}
-
-footer a:hover {
-  color: #a5b5f3;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  header h1 {
-    font-size: 1.75rem;
-  }
-
-  nav ul {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  nav ul li a {
-    padding: 12px 0;
-  }
-
-  .feature-item {
-    padding: 1.5rem;
-  }
-
-  .feature-item h3 {
-    font-size: 1.5rem;
-  }
-  h1, h2 {
-    color: #333;
-  }
-  
-  button {
-    cursor: pointer;
-  }
-  button:hover {
-    background-color: #4CAF50;
-  } 
+.sidebar-link.active {
+  @apply bg-blue-600;
 }

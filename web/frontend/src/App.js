@@ -1,37 +1,47 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 import Home from './Home';
 import Login from './Login';
 import Dashboard from './Dashboard';
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  // Hàm đăng nhập giả lập
-  const handleLogin = (email, password) => {
-    if (email === 'admin@hehe' && password === 'admin') {
-      setIsLoggedIn(true);
-    } else {
-      alert('Thông tin đăng nhập không đúng!');
-    }
-  };
-
   return (
     <Router>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+      />
       <Routes>
-        {/* Route đến trang Home */}
         <Route path="/" element={<Home />} />
-
-        {/* Route đến trang Login */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route 
-          path="/login" 
-          element={isLoggedIn ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />} 
-        />
-
-        {/* Route đến trang Dashboard (Tính Năng) */}
-        <Route 
-          path="/dashboard" 
-          element={isLoggedIn ? <Dashboard /> : <Navigate to="/login" />} 
+          path="*" 
+          element={
+            <div className="min-h-screen flex items-center justify-center bg-gray-900">
+              <div className="text-center">
+                <h1 className="text-6xl font-bold text-white mb-4">404</h1>
+                <p className="text-xl text-gray-400 mb-8">Trang không tồn tại</p>
+                <a 
+                  href="/"
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Về Trang Chủ
+                </a>
+              </div>
+            </div>
+          } 
         />
       </Routes>
     </Router>
