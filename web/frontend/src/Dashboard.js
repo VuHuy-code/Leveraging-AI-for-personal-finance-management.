@@ -61,12 +61,12 @@ function Dashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-800 p-4">
+      <div className="fixed left-0 top-0 h-full w-64 bg-gray-800 p-4 flex flex-col">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-white">FinanceAI</h1>
         </div>
         
-        <nav className="space-y-2">
+        <nav className="space-y-2 flex-grow">
           <button 
             onClick={() => setActiveTab('overview')}
             className={`w-full flex items-center p-3 rounded-lg ${
@@ -84,14 +84,15 @@ function Dashboard() {
           >
             <FaChartLine className="mr-3" /> Giao dịch
           </button>
-
-          <button 
-            onClick={handleLogout}
-            className="w-full flex items-center p-3 rounded-lg hover:bg-gray-700 text-white mt-auto"
-          >
-            <FaSignOutAlt className="mr-3" /> Đăng xuất
-          </button>
         </nav>
+
+        {/* Logout button */}
+        <button 
+          onClick={handleLogout}
+          className="w-full flex items-center p-3 rounded-lg hover:bg-gray-700 text-white mt-auto"
+        >
+          <FaSignOutAlt className="mr-3" /> Đăng xuất
+        </button>
       </div>
 
       {/* Main Content */}
