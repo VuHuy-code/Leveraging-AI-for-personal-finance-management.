@@ -19,6 +19,6 @@ def predict_category(description):
     return label_encoder.inverse_transform([predicted_class])[0]
 
 # Thử nghiệm với một mô tả mới
-description = "Mua sắm thực phẩm tại siêu thị"
+description = "Đặt vé xem phim"
 predicted_category = predict_category(description)
 print("Loại chi tiêu dự đoán:", predicted_category)
