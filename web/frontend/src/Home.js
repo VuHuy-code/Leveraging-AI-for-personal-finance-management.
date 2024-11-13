@@ -7,14 +7,18 @@ import {
   FaMobileAlt, 
   FaLightbulb,
   FaChartLine,
-  FaUserPlus
+  FaUserPlus,
+  FaFacebook,
+  FaTwitter,
+  FaInstagram,
+  FaLinkedin
 } from 'react-icons/fa';
 
 function Home() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-800 via-gray-900 to-black">
       {/* Navigation Bar */}
       <nav className="fixed top-0 w-full z-50 bg-gray-900/80 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -26,16 +30,14 @@ function Home() {
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => navigate('/login')}
-                className="text-gray-300 hover:text-white px-4 py-2 rounded-full
-                         transition duration-300"
+                className="text-gray-300 hover:text-white px-4 py-2 rounded-full transition duration-300"
               >
                 <FaSignInAlt className="inline mr-2" />
                 Đăng Nhập
               </button>
               <button
                 onClick={() => navigate('/register')}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full
-                         transition duration-300 flex items-center"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full transition duration-300 flex items-center"
               >
                 <FaUserPlus className="mr-2" />
                 Đăng Ký
@@ -50,19 +52,17 @@ function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
             <h1 className="text-5xl md:text-6xl font-bold text-white mb-6">
-              Quản Lý Tài Chính Thông Minh <br/>
+              Quản Lý Tài Chính Thông Minh <br />
               <span className="text-blue-400">Với Trí Tuệ Nhân Tạo</span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-300 mb-10 max-w-3xl mx-auto">
-              Tối ưu hóa tài chính cá nhân với sự hỗ trợ của AI. 
-              Phân tích thông minh, dự báo chính xác và tư vấn tài chính cá nhân hóa.
+              Tối ưu hóa tài chính cá nhân với sự hỗ trợ của AI. Phân tích thông minh, dự báo chính xác và tư vấn tài chính cá nhân hóa.
             </p>
             <div className="flex justify-center gap-6">
               <button
                 onClick={() => navigate('/register')}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-full 
-                         transition duration-300 ease-in-out transform hover:scale-105
-                         flex items-center justify-center"
+                         transition duration-300 ease-in-out transform hover:scale-105 flex items-center justify-center"
               >
                 <FaUserPlus className="mr-2" />
                 Bắt Đầu Ngay
@@ -170,84 +170,29 @@ function Home() {
         </div>
       </section>
 
-      {/* Call to Action Section */}
-      <section className="py-20 bg-gray-900/30 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-bold text-white mb-6">
-            Sẵn Sàng Tối Ưu Hóa Tài Chính?
-          </h2>
-          <p className="text-xl text-gray-300 mb-8">
-            Tham gia ngay hôm nay và khám phá sức mạnh của quản lý tài chính thông minh
-          </p>
-          <div className="flex justify-center gap-6">
-            <button
-              onClick={() => navigate('/register')}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full 
-                       transition duration-300"
-            >
-              Tạo Tài Khoản Miễn Phí
-            </button>
-            <button
-              onClick={() => navigate('/contact')}
-              className="bg-transparent border-2 border-blue-400 text-blue-400 hover:bg-blue-400/10 
-                       font-bold py-3 px-8 rounded-full transition duration-300"
-            >
-              Liên Hệ Tư Vấn
-            </button>
-          </div>
-        </div>
-      </section>
-
       {/* Footer */}
-      <footer className="bg-gray-900/50 backdrop-blur-sm py-12">
+      <footer className="bg-gray-900 py-8 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center md:text-left">
-              <h3 className="text-xl font-bold text-white mb-4">Về Chúng Tôi</h3>
-              <p className="text-gray-400">
-                Chúng tôi cam kết mang đến giải pháp quản lý tài chính thông minh và hiệu quả cho người dùng.
-              </p>
+          <div className="text-center text-gray-300">
+            <p className="mb-4">&copy; 2024 Finance AI. Tất cả quyền được bảo lưu.</p>
+            <div className="flex justify-center gap-6 mb-6">
+              <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-400">
+                <FaFacebook className="text-3xl" />
+              </a>
+              <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">
+                <FaTwitter className="text-3xl" />
+              </a>
+              <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-pink-500 hover:text-pink-400">
+                <FaInstagram className="text-3xl" />
+              </a>
+              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-500">
+                <FaLinkedin className="text-3xl" />
+              </a>
             </div>
-            <div className="text-center">
-              <h3 className="text-xl font-bold text-white mb-4">Liên Kết</h3>
-              <ul className="space-y-2">
-                <li>
-                  <button
-                    onClick={() => navigate('/about')}
-                    className="text-gray-400 hover:text-white transition duration-300"
-                  >
-                    Giới Thiệu
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => navigate('/features')}
-                    className="text-gray-400 hover:text-white transition duration-300"
-                  >
-                    Tính Năng
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => navigate('/contact')}
-                    className="text-gray-400 hover:text-white transition duration-300"
-                  >
-                    Liên Hệ
-                  </button>
-                </li>
-              </ul>
+            <div className="text-sm">
+              <a href="/privacy-policy" className="text-gray-400 hover:text-white mr-6">Chính Sách Bảo Mật</a>
+              <a href="/terms-of-service" className="text-gray-400 hover:text-white">Điều Khoản Dịch Vụ</a>
             </div>
-            <div className="text-center md:text-right">
-              <h3 className="text-xl font-bold text-white mb-4">Kết Nối</h3>
-              <div className="flex justify-center md:justify-end space-x-4">
-                <FaRocket className="text-2xl text-gray-400 hover:text-white cursor-pointer transition duration-300" />
-                <FaChartLine className="text-2xl text-gray-400 hover:text-white cursor-pointer transition duration-300" />
-                <FaMobileAlt className="text-2xl text-gray-400 hover:text-white cursor-pointer transition duration-300" />
-              </div>
-            </div>
-          </div>
-          <div className="text-center mt-8">
-            <p className="text-gray-400">© 2024 Finance AI. All rights reserved.</p>
           </div>
         </div>
       </footer>

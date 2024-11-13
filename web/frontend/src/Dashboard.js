@@ -14,7 +14,6 @@ import {
   ArcElement,
 } from 'chart.js';
 
-
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -60,7 +59,7 @@ function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Sidebar */}
       <div className="fixed left-0 top-0 h-full w-64 bg-gray-800 p-4">
         <div className="mb-8">
@@ -111,17 +110,17 @@ function Dashboard() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-gray-800 p-6 rounded-xl">
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg shadow-[#1e3a8a]">
             <h3 className="text-gray-400 mb-2">Tổng số dư</h3>
             <p className="text-2xl font-bold text-white">5,000,000 VNĐ</p>
             <span className="text-green-500 text-sm">+2.5% so với tháng trước</span>
           </div>
-          <div className="bg-gray-800 p-6 rounded-xl">
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg shadow-[#1e3a8a]">
             <h3 className="text-gray-400 mb-2">Chi tiêu tháng này</h3>
             <p className="text-2xl font-bold text-white">2,500,000 VNĐ</p>
             <span className="text-red-500 text-sm">+5% so với tháng trước</span>
           </div>
-          <div className="bg-gray-800 p-6 rounded-xl">
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg shadow-[#1e3a8a]">
             <h3 className="text-gray-400 mb-2">Tiết kiệm</h3>
             <p className="text-2xl font-bold text-white">1,500,000 VNĐ</p>
             <span className="text-green-500 text-sm">Đạt 75% mục tiêu</span>
@@ -130,12 +129,12 @@ function Dashboard() {
 
         {/* Charts */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-gray-800 p-6 rounded-xl">
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg shadow-[#1e3a8a]">
             <h3 className="text-white mb-4">Chi tiêu theo thời gian</h3>
             <Line data={lineChartData} options={{ responsive: true }} />
           </div>
           
-          <div className="bg-gray-800 p-6 rounded-xl">
+          <div className="bg-gray-800 p-6 rounded-xl shadow-lg shadow-[#1e3a8a]">
             <h3 className="text-white mb-4">Phân bổ chi tiêu</h3>
             <Pie data={pieChartData} options={{ responsive: true }} />
           </div>
