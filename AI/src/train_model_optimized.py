@@ -38,18 +38,19 @@ val_dataset = ChiTieuDataset(val_encodings, y_val.values)
 # Khởi tạo mô hình DistilBERT với số nhãn đầu ra
 model = DistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=len(data['category'].unique()))
 
+# Cài đặt các tham số huấn luyện tối ưu
 training_args = TrainingArguments(
     output_dir='../models/optimized_distilbert',
-    num_train_epochs=3,
-    per_device_train_batch_size=16,
-    learning_rate=3e-5,
-    weight_decay=0.02,
-    logging_dir='../logs',
-    save_total_limit=2,
-    load_best_model_at_end=True,
-    evaluation_strategy="epoch",  # Đánh giá theo từng epoch
-    save_strategy="epoch",       # Lưu mô hình theo từng epoch
-    warmup_steps=500,
+    evaluation_strategy="epoch",            # Đánh giá mô hình ở mỗi epoch
+    save_strategy="epoch",                  # Lưu mô hình ở mỗi epoch
+    num_train_epochs=5,                     
+    per_device_train_batch_size=16,         
+    per_device_eval_batch_size=16,          
+    learning_rate=2e-5,                     
+    weight_decay=0.01,                      
+    logging_dir='../logs',                  
+    load_best_model_at_end=True,            
+    save_total_limit=2                      
 )
 
 # Sử dụng Trainer API của Hugging Face để huấn luyện mô hình
@@ -59,23 +60,6 @@ trainer = Trainer(
     train_dataset=train_dataset,
     eval_dataset=val_dataset
 )
-
-# Cập nhật mô hình với fine-tuning
-def fine_tune_model(train_dataset):
-    """Fine-tuning mô hình"""
-    # Tham số huấn luyện
-    training_args = TrainingArguments(
-        output_dir='../models/optimized_distilbert',
-        num_train_epochs=3,                     # Thử tăng số epoch
-        per_device_train_batch_size=16,         # Batch size lớn hơn
-        learning_rate=2e-5,                     # Thử học rate cao hơn
-        weight_decay=0.01,                      
-        logging_dir='../logs',
-        save_total_limit=2,
-        load_best_model_at_end=True,
-        evaluation_strategy="epoch"             # Đánh giá sau mỗi epoch
-    )
-
 
 trainer.train()
 

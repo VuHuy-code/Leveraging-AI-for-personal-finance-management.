@@ -1,2 +1,4 @@
 env
 models/optimized_distilbert
+logs
+models/updated_model

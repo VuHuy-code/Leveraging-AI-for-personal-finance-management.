@@ -1,10 +1,9 @@
-import torch
-from transformers import Trainer, TrainingArguments
 from transformers import DistilBertTokenizer, DistilBertForSequenceClassification
-import pandas as pd
+import torch
 import pickle
+import pandas as pd
 
-# Tải mô hình và tokenizer đã tối ưu hóa
+# Tải mô hình và tokenizer đã huấn luyện
 model = DistilBertForSequenceClassification.from_pretrained("../models/optimized_distilbert")
 tokenizer = DistilBertTokenizer.from_pretrained("../models/optimized_distilbert")
 
@@ -12,87 +11,47 @@ tokenizer = DistilBertTokenizer.from_pretrained("../models/optimized_distilbert"
 with open("../data/label_encoder.pkl", "rb") as f:
     label_encoder = pickle.load(f)
 
-# Dataset class for PyTorch
-class ChiTieuDataset(torch.utils.data.Dataset):
-    def __init__(self, encodings, labels):
-        self.encodings = encodings
-        self.labels = labels
+# Hàm dự đoán loại chi tiêu từ mô tả
+def predict_category(description):
+    inputs = tokenizer(description, return_tensors="pt", truncation=True, padding=True, max_length=128)
+    outputs = model(**inputs)
+    logits = outputs.logits
+    predicted_class = torch.argmax(logits, dim=1).item()
+    return label_encoder.inverse_transform([predicted_class])[0]
 
-    def __getitem__(self, idx):
-        item = {key: val[idx] for key, val in self.encodings.items()}
-        item['labels'] = torch.tensor(self.labels[idx])
-        return item
+# Hàm lưu thông tin mới vào file CSV
+def save_new_data(description, predicted_category):
+    # Đọc dữ liệu cũ hoặc tạo mới nếu file chưa tồn tại
+    try:
+        new_data = pd.read_csv('../data/new_chi_tieu.csv')
+    except FileNotFoundError:
+        new_data = pd.DataFrame(columns=['description', 'category'])
 
-    def __len__(self):
-        return len(self.labels)
+    # Tạo DataFrame mới cho dòng dữ liệu mới
+    new_row = pd.DataFrame({'description': [description], 'category': [predicted_category]})
 
-def preprocess_new_data(new_data):
-    """Chuẩn bị và mã hóa dữ liệu mới để huấn luyện"""
-    if new_data.empty or 'description' not in new_data.columns:
-        raise ValueError("Dữ liệu đầu vào trống hoặc không có cột 'description'.")
+    # Dùng pd.concat thay vì append
+    new_data = pd.concat([new_data, new_row], ignore_index=True)
 
-    encodings = tokenizer(new_data['description'].tolist(), truncation=True, padding=True, max_length=128, return_tensors="pt")
-    
-    if len(encodings['input_ids']) == 0:
-        raise ValueError("Mã hóa đầu vào bị trống, kiểm tra lại dữ liệu đầu vào.")
+    # Lưu lại vào file CSV
+    new_data.to_csv('../data/new_chi_tieu.csv', index=False)
 
-    labels = label_encoder.transform(new_data['category'])
-    dataset = ChiTieuDataset(encodings, labels)
-    return dataset
+# Hàm để người dùng nhập thông tin chi tiêu
+def input_and_predict():
+    while True:
+        # Nhập mô tả chi tiêu từ người dùng
+        description = input("Nhập mô tả chi tiêu (hoặc 'exit' để thoát): ")
+        if description.lower() == 'exit':
+            print("Thoát chương trình.")
+            break
 
-def update_model(new_data):
-    """Cập nhật mô hình với dữ liệu mới"""
-    if new_data.empty or 'description' not in new_data.columns:
-        raise ValueError("Dữ liệu đầu vào trống hoặc không có cột 'description'.")
+        # Dự đoán loại chi tiêu
+        predicted_category = predict_category(description)
+        print(f"Loại chi tiêu dự đoán: {predicted_category}")
 
-    # Chia dữ liệu để tạo tập eval (đảm bảo ít nhất 1 dòng dữ liệu)
-    if len(new_data) > 1:
-        eval_data = new_data.sample(frac=0.2, random_state=42)  # Lấy 20% làm tập đánh giá
-        train_data = new_data.drop(eval_data.index)
-    else:
-        eval_data = new_data
-        train_data = new_data
+        # Lưu vào dữ liệu mới
+        save_new_data(description, predicted_category)
+        print("Thông tin đã được lưu vào dữ liệu mới.\n")
 
-    print("Dữ liệu eval:")
-    print(eval_data)
-
-    if eval_data.empty or 'description' not in eval_data.columns:
-        raise ValueError("Dữ liệu eval trống hoặc không có cột 'description'.")
-
-    eval_dataset = preprocess_new_data(eval_data)
-    train_dataset = preprocess_new_data(train_data)
-
-
-    # Tạo bộ dữ liệu đánh giá (có thể sử dụng một phần của `new_data` hoặc dữ liệu khác)
-    eval_data = new_data.sample(frac=0.2)  # Lấy 20% dữ liệu làm tập đánh giá
-    eval_dataset = preprocess_new_data(eval_data)
-
-    # Thiết lập tham số huấn luyện
-    training_args = TrainingArguments(
-        output_dir='../models/optimized_distilbert',
-        num_train_epochs=1,
-        per_device_train_batch_size=8,
-        learning_rate=1e-5,
-        weight_decay=0.01,
-        logging_dir='../logs',
-        save_total_limit=2,
-        load_best_model_at_end=True,
-        evaluation_strategy="steps",
-        save_strategy="steps",
-        eval_steps=500
-    )
-
-
-    # Khởi tạo Trainer với dữ liệu mới
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=new_dataset
-    )
-
-    # Fine-tuning trên dữ liệu mới
-    trainer.train()
-
-    # Lưu mô hình đã cập nhật
-    model.save_pretrained("../models/optimized_distilbert")
-    tokenizer.save_pretrained("../models/optimized_distilbert")
+# Gọi hàm nhập liệu và dự đoán
+input_and_predict()
