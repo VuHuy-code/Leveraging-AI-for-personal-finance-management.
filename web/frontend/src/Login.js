@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { FaEnvelope, FaLock, FaGoogle, FaFacebook } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 
-function Login() {
+function Login({ onLogin }) { // Nhận onLogin từ props
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -17,7 +17,8 @@ function Login() {
       // Giả lập đăng nhập
       if (email === 'admin@hehe' && password === '123456') {
         toast.success('Đăng nhập thành công!');
-        navigate('/dashboard');
+        onLogin(); // Gọi onLogin để cập nhật trạng thái
+        navigate('/dashboard'); // Điều hướng tới dashboard sau khi đăng nhập
       } else {
         toast.error('Email hoặc mật khẩu không đúng!');
       }
@@ -49,12 +50,10 @@ function Login() {
 
         {/* Login Form */}
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {/* Email */}
           <div className="rounded-md shadow-sm -space-y-px">
-            {/* Email */}
             <div>
-              <label htmlFor="email-address" className="sr-only">
-                Email
-              </label>
+              <label htmlFor="email-address" className="sr-only">Email</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <FaEnvelope className="h-5 w-5 text-gray-400" />
@@ -79,9 +78,7 @@ function Login() {
 
             {/* Password */}
             <div>
-              <label htmlFor="password" className="sr-only">
-                Mật khẩu
-              </label>
+              <label htmlFor="password" className="sr-only">Mật khẩu</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <FaLock className="h-5 w-5 text-gray-400" />
