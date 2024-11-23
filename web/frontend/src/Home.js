@@ -46,96 +46,102 @@ function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-blue-950 via-black to-blue-950">
-      {/* Navigation Bar */}
-      <nav className={`fixed top-0 w-full bg-transparent backdrop-blur-sm hover:bg-white/5 transition-all duration-300 z-50 ${
-        visible ? 'transform translate-y-0' : 'transform -translate-y-full'
-      }`}>
-        <div className="px-4 py-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <FaRocket className="mr-2 text-2xl text-blue-400" />
-              <span className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
-                Finance AI
+     {/* Navigation Bar */}
+<nav className={`fixed top-0 w-full bg-transparent transition-all duration-300 z-50 ${
+  visible ? 'transform translate-y-0' : 'transform -translate-y-full'
+}`}>
+  <div className="container mx-auto">
+    <div className="flex items-center justify-between px-10 py-6">
+      <div className="flex items-center">
+        <FaRocket className="mr-3 text-3xl text-blue-400" />
+        <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
+          Finance AI
+        </span>
+      </div>
+      <div className="flex items-center space-x-6">
+        <button
+          onClick={() => navigate('/login')}
+          className="py-3 text-lg text-gray-300 transition duration-300 rounded-full px-7 hover:text-blue-400"
+        >
+          <FaSignInAlt className="inline mr-3 text-xl" />
+          Đăng Nhập
+        </button>
+        <button
+          onClick={() => navigate('/register')}
+          className="flex items-center px-8 py-3 text-lg text-white transition duration-300 rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500"
+        >
+          <FaUserPlus className="mr-3 text-xl" />
+          Đăng Ký
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>
+      {/* Hero Section */}
+      <section className="relative w-full min-h-[100vh] flex items-center justify-center">
+        {/* Background Image */}
+        <div 
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: 'url("/background.gif")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            opacity: '0.4',
+            mixBlendMode: 'overlay'
+          }}
+        />
+        
+        <div className="container relative z-10 w-full px-4 mx-auto">
+          <div className="text-center">
+            <h1 className="mb-16 text-4xl font-bold text-gray-100 md:text-5xl lg:text-6xl" data-aos="fade-up" data-aos-delay="100">
+              Quản Lý Tài Chính Thông Minh <br className="mb-6" />
+              <span className="block pb-2 mt-8 mb-16 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
+                Với Trí Tuệ Nhân Tạo
               </span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate('/login')}
-                className="px-4 py-2 text-gray-300 transition duration-300 rounded-full hover:text-blue-400"
-              >
-                <FaSignInAlt className="inline mr-2" />
-                Đăng Nhập
-              </button>
+            </h1>
+            
+            <div className="flex justify-center mt-8" data-aos="fade-up" data-aos-delay="300">
               <button
                 onClick={() => navigate('/register')}
-                className="flex items-center px-6 py-2 text-white transition duration-300 rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500"
+                className="relative px-16 py-6 text-xl font-bold transition duration-300 transform bg-transparent border-2 rounded-full group text-white/80 border-white/30 hover:bg-gradient-to-r hover:from-white/10 hover:to-blue-400/10 hover:border-white/50 backdrop-blur-sm hover:text-white hover:scale-105"
               >
-                <FaUserPlus className="mr-2" />
-                Đăng Ký
+                <div className="absolute inset-0 rounded-full bg-blue-600/5 backdrop-blur-sm"></div>
+                <span className="relative flex items-center justify-center">
+                  <FaUserPlus className="mr-3 text-2xl" />
+                  Bắt Đầu Ngay
+                </span>
               </button>
             </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-20">
-        <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <div className="text-center">
-          <h1 className="mb-6 text-5xl font-bold text-gray-100 md:text-6xl" data-aos="fade-up" data-aos-delay="100"data-aos-mirror="true" data-aos-once="false">
-  Quản Lý Tài Chính Thông Minh <br />
-  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
-    Với Trí Tuệ Nhân Tạo
-  </span>
-</h1>
-<p className="max-w-3xl mx-auto mb-10 text-xl text-gray-300 md:text-2xl" data-aos="fade-up" data-aos-delay="200" data-aos-mirror="true" data-aos-once="false">
-  Tối ưu hóa tài chính cá nhân với sự hỗ trợ của AI. Phân tích thông minh, dự báo chính xác và tư vấn tài chính cá nhân hóa.
-</p>
-<div className="flex flex-col items-center justify-center gap-6 sm:flex-row" data-aos="fade-up" data-aos-delay="300"data-aos-mirror="true" data-aos-once="false">
-  <button
-    onClick={() => navigate('/register')}
-    className="flex items-center justify-center px-8 py-4 font-bold text-white transition duration-300 ease-in-out transform rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 hover:scale-105"
-  >
-    <FaUserPlus className="mr-2" />
-    Bắt Đầu Ngay
-  </button>
-  <button
-    onClick={() => navigate('/demo')}
-    className="flex items-center justify-center px-8 py-4 font-bold text-blue-400 transition duration-300 bg-transparent border-2 rounded-full hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white"
-  >
-    <FaRocket className="mr-2" />
-    Xem Demo
-  </button>
-</div>
           </div>
         </div>
       </section>
 
       {/* How It Works Section */}
-      <section className="py-20 bg-gradient-to-br from-gray-900 to-black" data-aos="fade-up">
-        <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <div className="mb-16 text-center">
-            <h2 className="pb-1 text-4xl font-bold text-transparent mb-7 bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
+      <section className="w-full py-8 bg-gradient-to-br from-gray-900 to-black" data-aos="fade-up">
+        <div className="container px-4 mx-auto">
+          <div className="mb-8 text-center">
+            <h2 className="mb-3 text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
               Cách Hoạt Động
             </h2>
-            <p className="mb-6 text-xl text-gray-300">Đơn giản hóa quản lý tài chính của bạn</p>
+            <p className="text-base text-gray-300">Đơn giản hóa quản lý tài chính của bạn</p>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-4">
             {[
-              { icon: <FaMobileAlt className="text-4xl text-blue-400" />, title: "Kết Nối", description: "Liên kết tài khoản ngân hàng và ví điện tử" },
-              { icon: <FaChartPie className="text-4xl text-blue-400" />, title: "Phân Tích", description: "AI tự động phân tích giao dịch và chi tiêu" },
-              { icon: <FaLightbulb className="text-4xl text-blue-400" />, title: "Đề Xuất", description: "Nhận gợi ý tối ưu hóa tài chính cá nhân" },
-              { icon: <FaChartLine className="text-4xl text-blue-400" />, title: "Theo Dõi", description: "Giám sát và điều chỉnh kế hoạch tài chính" }
+              { icon: <FaMobileAlt className="text-3xl text-blue-400" />, title: "Kết Nối", description: "Liên kết tài khoản ngân hàng và ví điện tử" },
+              { icon: <FaChartPie className="text-3xl text-blue-400" />, title: "Phân Tích", description: "AI tự động phân tích giao dịch và chi tiêu" },
+              { icon: <FaLightbulb className="text-3xl text-blue-400" />, title: "Đề Xuất", description: "Nhận gợi ý tối ưu hóa tài chính cá nhân" },
+              { icon: <FaChartLine className="text-3xl text-blue-400" />, title: "Theo Dõi", description: "Giám sát và điều chỉnh kế hoạch tài chính" }
             ].map((step, index) => (
               <div key={index} className="text-center" data-aos="fade-up" data-aos-delay={index * 100}>
-                <div className="flex justify-center mb-4">
-                  <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gray-800/70">
+                <div className="flex justify-center mb-3">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-gray-800/70">
                     {step.icon}
                   </div>
                 </div>
-                <h3 className="mb-2 text-xl font-bold text-gray-100">{step.title}</h3>
-                <p className="text-gray-300">{step.description}</p>
+                <h3 className="mb-2 text-lg font-bold text-gray-100">{step.title}</h3>
+                <p className="text-sm text-gray-300">{step.description}</p>
               </div>
             ))}
           </div>
@@ -143,57 +149,59 @@ function Home() {
       </section>
 
       {/* Features Section */}
-<section id="features" className="py-20 bg-gradient-to-br from-black to-gray-900" data-aos="slide-up">
-  <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-    <div className="mb-16 text-center">
-      <h2 className="pb-1 mb-6 text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
-        Tính Năng Nổi Bật
-      </h2>
-      <p className="text-lg text-gray-300">Trải nghiệm quản lý tài chính hiện đại</p>
-    </div>
+      <section className="w-full py-8 bg-gradient-to-br from-black to-gray-900">
+        <div className="container px-4 mx-auto" data-aos="slide-up">
+          <div className="mb-8 text-center">
+            <h2 className="mb-3 text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
+              Tính Năng Nổi Bật
+            </h2>
+            <p className="text-base text-gray-300">Trải nghiệm quản lý tài chính hiện đại</p>
+          </div>
 
-    <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-      {[
-        {
-          icon: <FaChartPie className="text-4xl text-blue-400" />,
-          title: "Phân Tích Chi Tiêu",
-          description:
-            "AI tự động phân loại và phân tích chi tiêu. Nhận thông báo thông minh về các khoản chi bất thường.",
-        },
-        {
-          icon: <FaChartLine className="text-4xl text-blue-400" />,
-          title: "Dự Báo Tài Chính",
-          description:
-            "Dự đoán xu hướng chi tiêu và đề xuất tối ưu ngân sách dựa trên AI.",
-        },
-        {
-          icon: <FaLightbulb className="text-4xl text-blue-400" />,
-          title: "Tư Vấn Thông Minh",
-          description:
-            "Nhận tư vấn cá nhân hóa về cách tối ưu hóa tài chính của bạn.",
-        },
-      ].map((feature, index) => (
-        <div
-          key={index}
-          className="card"
-          data-aos="zoom-in"
-          data-aos-delay={index * 100}
-        >
-          <div className="flex flex-col items-center text-center card-content">
-            {feature.icon}
-            <h3 className="mt-4 mb-2 text-xl font-bold text-white">{feature.title}</h3>
-            <p className="text-gray-300">{feature.description}</p>
+          <div className="grid gap-8 px-4 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                icon: <FaChartPie className="text-3xl text-blue-400" />,
+                title: "Phân Tích Chi Tiêu",
+                description:
+                  "AI tự động phân loại và phân tích chi tiêu. Nhận thông báo về các khoản chi bất thường.",
+              },
+              {
+                icon: <FaChartLine className="text-3xl text-blue-400" />,
+                title: "Dự Báo Tài Chính",
+                description:
+                  "Dự đoán xu hướng chi tiêu và đề xuất tối ưu ngân sách dựa trên AI.",
+              },
+              {
+                icon: <FaLightbulb className="text-3xl text-blue-400" />,
+                title: "Tư Vấn Thông Minh",
+                description:
+                  "Nhận tư vấn cá nhân hóa về cách tối ưu hóa tài chính của bạn.",
+              },
+            ].map((feature, index) => (
+              <div
+                key={index}
+                className="p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg shadow-[#1e3a8a] min-h-[220px] flex flex-col items-center justify-center mx-auto w-full max-w-sm"
+                data-aos="zoom-in"
+                data-aos-delay={index * 100}
+              >
+                <div className="flex flex-col items-center text-center">
+                  <div className="p-2.5 rounded-full bg-gray-800/70">
+                    {feature.icon}
+                  </div>
+                  <h3 className="mt-3 mb-2 text-lg font-bold text-white">{feature.title}</h3>
+                  <p className="text-sm text-gray-300">{feature.description}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      ))}
-    </div>
-  </div>
-</section>
+      </section>
 
       {/* Footer */}
-      <footer className="py-8 bg-gradient-to-br from-black to-gray-900">
-        <div className="px-4 mx-auto text-center max-w-7xl sm:px-6 lg:px-8">
-          <div className="flex justify-center mb-4 space-x-6">
+      <footer className="w-full py-6 bg-gradient-to-br from-black to-gray-900">
+        <div className="container px-4 mx-auto text-center">
+          <div className="flex justify-center mb-3 space-x-4">
             {[
               { icon: <FaFacebook className="text-xl" />, link: "https://facebook.com" },
               { icon: <FaTwitter className="text-xl" />, link: "https://twitter.com" },

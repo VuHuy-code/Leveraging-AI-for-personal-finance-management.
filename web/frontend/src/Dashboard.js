@@ -1,104 +1,128 @@
 import React, { useState } from 'react';
-import { FaSignOutAlt, FaChartLine, FaBullseye, FaSearch, FaBell } from 'react-icons/fa';
+import { FaSignOutAlt, FaChartLine, FaBullseye, FaSearch, FaBell, FaRegLightbulb } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
 function Dashboard({ onLogout }) {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Xử lý sự kiện tìm kiếm
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
   };
 
   const handleLogout = () => {
-    onLogout(); // Gọi hàm đăng xuất từ props
-    navigate('/'); // Dẫn tới trang chủ
+    onLogout();
+    navigate('/');
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700 text-white flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-gray-800 p-6 space-y-6 flex flex-col">
-        <h2 className="text-2xl font-bold">Fiction AI</h2>
+    <div className="flex min-h-screen text-white bg-gradient-to-r from-blue-950 via-black to-blue-950">
+      <div className="flex flex-col w-64 p-6 space-y-6 bg-gray-800/50 backdrop-blur-sm">
+        <div className="flex items-center space-x-3">
+          <h2 className="text-2xl font-bold text-white">Finance AI</h2>
+        </div>
         
-        {/* Thống Kê Chi Tiêu */}
         <div 
-          className="flex items-center space-x-2 hover:bg-gray-700 p-3 rounded-lg cursor-pointer" 
+          className="flex items-center p-3 space-x-2 rounded-lg cursor-pointer hover:bg-gray-700/50" 
           onClick={() => navigate('/statistics')}
         >
-          <FaChartLine />
+          <FaChartLine className="text-white" />
           <span className="ml-2">Thống Kê Chi Tiêu</span>
         </div>
 
-        {/* Mục Tiêu Tiết Kiệm */}
         <div 
-          className="flex items-center space-x-2 hover:bg-gray-700 p-3 rounded-lg cursor-pointer" 
+          className="flex items-center p-3 space-x-2 rounded-lg cursor-pointer hover:bg-gray-700/50" 
           onClick={() => navigate('/savings')}
         >
-          <FaBullseye />
+          <FaBullseye className="text-white" />
           <span className="ml-2">Mục Tiêu Tiết Kiệm</span>
         </div>
 
-        {/* Phần còn lại của nội dung Sidebar */}
         <div className="flex-1"></div>
 
-        {/* Đăng xuất */}
         <button 
           onClick={handleLogout}
-          className="w-full flex items-center p-3 rounded-lg hover:bg-gray-700 text-white mt-auto"
+          className="flex items-center w-full p-3 mt-auto text-white rounded-lg hover:bg-gray-700/50"
         >
-          <FaSignOutAlt className="mr-3" /> Đăng xuất
+          <FaSignOutAlt className="mr-3 text-white" /> Đăng xuất
         </button>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 p-6">
-        <div className="flex justify-between items-center mb-6">
-          {/* Thanh tìm kiếm dịch qua phải */}
-          <div className="relative max-w-xs w-full ml-auto">
-            <input 
-              type="text"
-              value={searchTerm}
-              onChange={handleSearchChange}
-              placeholder="Tìm kiếm..."
-              className="w-full px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <FaSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white" />
-          </div>
-          
-          {/* Icon Thông Báo */}
-          <div className="ml-4">
-            <FaBell className="text-xl cursor-pointer hover:text-blue-400" />
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-white">
+            Xin chào, User!
+          </h1>
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <input 
+                type="text"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                placeholder="Tìm kiếm..."
+                className="w-64 px-4 py-2 text-white rounded-lg bg-gray-800/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <FaSearch className="absolute text-white transform -translate-y-1/2 right-3 top-1/2" />
+            </div>
+            
+            <div className="relative">
+              <FaBell className="text-xl text-white cursor-pointer hover:text-gray-300" />
+              <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+            </div>
           </div>
         </div>
 
-        {/* Nội dung Giới thiệu và Hướng dẫn mới */}
-        <div className="bg-gray-800 p-6 rounded-xl shadow-md shadow-[#1e3a8a] bg-opacity-60 mb-6">
-          <h2 className="text-2xl font-bold mb-4">Khám Phá Cách Tối Ưu Hóa Tài Chính Của Bạn</h2>
-          <p className="text-sm text-gray-400 mb-4">
-            Chào mừng bạn đến với Fiction AI! Đây là nơi bạn có thể theo dõi chi tiêu hàng ngày và đặt ra các mục tiêu tiết kiệm cho tương lai. Hãy bắt đầu hành trình quản lý tài chính thông minh của bạn ngay hôm nay!
-          </p>
-          <h3 className="text-xl font-semibold text-blue-400 mb-2">Các Tính Năng Nổi Bật:</h3>
-          <ul className="list-disc pl-6 text-sm text-gray-400 mb-4">
-            <li>Theo dõi chi tiêu theo danh mục và phân tích dữ liệu chi tiết.</li>
-            <li>Đặt mục tiêu tiết kiệm và theo dõi tiến trình thực hiện.</li>
-            <li>Nhận thông báo nhắc nhở về chi tiêu và các cột mốc tiết kiệm quan trọng.</li>
-            <li>Tính năng tìm kiếm giúp bạn dễ dàng tìm kiếm các mục trong hệ thống.</li>
-          </ul>
-          <h3 className="text-xl font-semibold text-blue-400 mb-2">Tại Sao Bạn Cần Quản Lý Tài Chính?</h3>
-          <p className="text-sm text-gray-400 mb-4">
-            Quản lý tài chính là một phần quan trọng giúp bạn duy trì ổn định cuộc sống và chuẩn bị cho tương lai. Việc theo dõi chi tiêu và đặt ra mục tiêu tiết kiệm không chỉ giúp bạn kiểm soát dòng tiền mà còn tạo nền tảng vững chắc cho các kế hoạch dài hạn.
-          </p>
-          <h3 className="text-xl font-semibold text-blue-400 mb-2">Lợi Ích Khi Sử Dụng Fiction AI:</h3>
-          <ul className="list-disc pl-6 text-sm text-gray-400 mb-4">
-            <li>Giúp bạn nhìn thấy rõ ràng dòng tiền của mình, từ đó ra quyết định chi tiêu thông minh hơn.</li>
-            <li>Cung cấp các báo cáo chi tiết về chi tiêu và tiết kiệm, giúp bạn điều chỉnh ngân sách kịp thời.</li>
-            <li>Khuyến khích bạn đạt được các mục tiêu tài chính thông qua các công cụ theo dõi và thông báo tích cực.</li>
-          </ul>
-          <p className="text-sm text-gray-400 mt-4">
-            Đừng quên kiểm tra các mục tiêu tiết kiệm và điều chỉnh chiến lược tài chính của bạn mỗi tháng để đạt được thành công trong việc quản lý tài chính cá nhân.
-          </p>
+        {/* Phân tích và Gợi ý */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="p-6 bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg shadow-[#1e3a8a]">
+            <div className="flex items-center mb-6 space-x-3">
+              <FaChartLine className="text-2xl text-white" />
+              <h2 className="text-xl font-bold text-white">Phân Tích Chi Tiêu</h2>
+            </div>
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-gray-700/50">
+                <h4 className="mb-2 font-semibold text-white">Chi Tiêu Lớn Nhất</h4>
+                <p className="text-white">Ăn uống: 1,200,000₫ (48%)</p>
+                <div className="w-full h-2 mt-2 bg-gray-600 rounded-full">
+                  <div className="w-1/2 h-2 bg-blue-600 rounded-full"></div>
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-gray-700/50">
+                <h4 className="mb-2 font-semibold text-white">Tiết Kiệm Tốt Nhất</h4>
+                <p className="text-white">Di chuyển: -150,000₫ (-15%)</p>
+                <div className="w-full h-2 mt-2 bg-gray-600 rounded-full">
+                  <div className="w-1/3 h-2 bg-blue-600 rounded-full"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg shadow-[#1e3a8a]">
+            <div className="flex items-center mb-6 space-x-3">
+              <FaRegLightbulb className="text-2xl text-white" />
+              <h2 className="text-xl font-bold text-white">Gợi Ý Tài Chính</h2>
+            </div>
+            <div className="space-y-4">
+              <div className="flex p-4 space-x-4 rounded-lg bg-gray-700/50">
+                <div className="flex items-center justify-center flex-shrink-0 w-10 h-10 rounded-full bg-blue-600/20">
+                  <FaBullseye className="text-white" />
+                </div>
+                <div>
+                  <h4 className="mb-1 font-semibold text-white">Cơ Hội Tiết Kiệm</h4>
+                  <p className="text-sm text-white">Giảm 20% chi tiêu ăn uống ngoài có thể tiết kiệm thêm 240,000₫/tháng</p>
+                </div>
+              </div>
+              <div className="flex p-4 space-x-4 rounded-lg bg-gray-700/50">
+                <div className="flex items-center justify-center flex-shrink-0 w-10 h-10 rounded-full bg-blue-600/20">
+                  <FaChartLine className="text-white" />
+                </div>
+                <div>
+                  <h4 className="mb-1 font-semibold text-white">Xu Hướng Tích Cực</h4>
+                  <p className="text-sm text-white">Chi tiêu của bạn đã giảm 15% so với tháng trước. Hãy duy trì xu hướng này!</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

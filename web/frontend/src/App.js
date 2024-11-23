@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './Home';
 import Login from './Login';
+import Register from './Register';
 import Dashboard from './Dashboard';
 import Statistics from './Statistics';
+import Savings from './Savings';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -24,16 +26,35 @@ function App() {
 
   return (
     <div>
-      <ToastContainer />
+      <ToastContainer 
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+      />
       <Router>
         <Routes>
-          {/* Đường dẫn cho trang Home, nếu đã đăng nhập thì chuyển hướng tới Dashboard */}
-          <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} />
+          <Route 
+            path="/" 
+            element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} 
+          />
+          
+          <Route 
+            path="/login" 
+            element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />} 
+          />
+          
+          <Route 
+            path="/register" 
+            element={isAuthenticated ? <Navigate to="/dashboard" /> : <Register />} 
+          />
 
-          {/* Đường dẫn cho trang Login, nếu đã đăng nhập thì chuyển hướng tới Dashboard */}
-          <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login onLogin={handleLogin} />} />
-
-          {/* Đường dẫn bảo vệ cho Dashboard */}
           <Route
             path="/dashboard"
             element={
@@ -45,7 +66,6 @@ function App() {
             }
           />
 
-          {/* Đường dẫn bảo vệ cho Statistics */}
           <Route
             path="/statistics"
             element={
@@ -57,7 +77,18 @@ function App() {
             }
           />
 
-          {/* Đường dẫn cho trang không tồn tại */}
+          <Route
+            path="/savings"
+            element={
+              isAuthenticated ? (
+                <Savings onLogout={handleLogout} />
+              ) : (
+                <Navigate to="/" />
+              )
+            }
+          />
+
+          {/* Redirect tất cả các route không hợp lệ về trang chủ */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Router>

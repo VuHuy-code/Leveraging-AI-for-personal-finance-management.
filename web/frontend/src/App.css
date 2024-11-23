@@ -1,7 +1,5 @@
-/* Thêm vào cuối file */
-
 .dashboard-card {
-  @apply bg-gray-800 p-6 rounded-xl transition-all duration-300;
+  @apply p-6 transition-all duration-300 bg-gray-800 rounded-xl;
 }
 
 .dashboard-card:hover {
@@ -13,22 +11,20 @@
 }
 
 .stat-label {
-  @apply text-gray-400 text-sm;
+  @apply text-sm text-gray-400;
 }
 
 .chart-container {
-  @apply bg-gray-800 p-6 rounded-xl;
+  @apply p-6 bg-gray-800 rounded-xl;
   min-height: 300px;
 }
 
 .action-button {
-  @apply bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center 
-         hover:bg-blue-700 transition-colors duration-300;
+  @apply flex items-center px-4 py-2 text-white transition-colors duration-300 bg-blue-600 rounded-lg hover:bg-blue-700;
 }
 
 .sidebar-link {
-  @apply flex items-center p-3 rounded-lg text-white hover:bg-gray-700 
-         transition-colors duration-200;
+  @apply flex items-center p-3 text-white transition-colors duration-200 rounded-lg hover:bg-gray-700;
 }
 
 .sidebar-link.active {
@@ -157,4 +153,22 @@ html {
 
 .card:hover .card-content {
   background: #151821;
+}
+.overflow-hidden {
+  overflow: hidden;
+}
+
+section {
+  position: relative;
+  will-change: transform;
+}
+
+.absolute {
+  transition: transform 0.1s ease-out;
+}
+.container {
+  width: 100%;
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
 }
