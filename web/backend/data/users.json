@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Huy Nguyen",
+    "email": "user@example.com",
+    "password": "$2y$10$IhLjFsyUM/Yy1KiVz6bPf.SX0Wmtg50rrOD4fqA10KfmpoWr2B77K"
+  },
+  {
+    "id": 2,
+    "name": "Nguyen Van A",
+    "email": "a@example.com",
+    "password": "$2a$10$D1mE.y7OLzL0Zg/IR03lWeXj0rj4zcnEIE5J2uByNcDCeAIEQKvOW"
+  },
+  {
+    "id": 3,
+    "name": "Tran Thi B",
+    "email": "b@example.com",
+    "password": "$2a$10$7JuqoaI/3aShIvYxKp9DAOSFJllI8ZsdKCVXlzvOxX3Di7KRxEepG"
+  },
+  {
+    "id": 4,
+    "name": "Nguyen Van C",
+    "email": "admin@hehe",
+    "password": "$2y$10$IhLjFsyUM/Yy1KiVz6bPf.SX0Wmtg50rrOD4fqA10KfmpoWr2B77K"
+  }
+]

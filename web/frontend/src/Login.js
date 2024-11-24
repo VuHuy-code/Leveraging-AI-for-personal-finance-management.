@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaEnvelope, FaLock, FaGoogle, FaFacebook } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+import authService from './authService';
 
 function Login({ onLogin }) {
   const [email, setEmail] = useState('');
@@ -14,22 +15,19 @@ function Login({ onLogin }) {
     setIsLoading(true);
 
     try {
-      if (email === 'admin@hehe' && password === '123456') {
-        toast.success('Đăng nhập thành công!');
-        onLogin();
-        navigate('/dashboard');
-      } else {
-        toast.error('Email hoặc mật khẩu không đúng!');
-      }
+      await authService.login(email, password);
+      toast.success('Đăng nhập thành công!');
+      onLogin();
+      navigate('/dashboard');
     } catch (error) {
-      toast.error('Đã có lỗi xảy ra!');
+      toast.error(error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-blue-950 via-black to-blue-950 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="flex items-center justify-center min-h-screen px-4 py-12 bg-gradient-to-r from-blue-950 via-black to-blue-950 sm:px-6 lg:px-8">
       <div className="w-full max-w-md space-y-8 bg-gray-900/70 backdrop-blur-md rounded-xl p-10 shadow-[0_4px_15px_0px_rgba(0,119,255,0.3),0_4px_15px_0px_rgba(0,255,200,0.3)]">
         <div className="text-center">
           <h2 className="pb-1 text-4xl font-bold text-white">
@@ -39,7 +37,7 @@ function Login({ onLogin }) {
             Hoặc{' '}
             <button
               onClick={() => navigate('/')}
-              className="text-blue-400 hover:text-cyan-400 font-medium"
+              className="font-medium text-blue-400 hover:text-cyan-400"
             >
               quay lại trang chủ
             </button>
@@ -52,7 +50,7 @@ function Login({ onLogin }) {
               Email
             </label>
             <div className="relative">
-              <span className="absolute inset-y-0 left-4 flex items-center">
+              <span className="absolute inset-y-0 flex items-center left-4">
                 <FaEnvelope className="text-blue-400" />
               </span>
               <input
@@ -61,7 +59,7 @@ function Login({ onLogin }) {
                 type="email"
                 required
                 placeholder="Địa chỉ email"
-                className="w-full py-3 pl-12 pr-4 bg-gray-800/70 border-none rounded-full text-gray-100 focus:ring-2 focus:ring-blue-500"
+                className="w-full py-3 pl-12 pr-4 text-gray-100 border-none rounded-full bg-gray-800/70 focus:ring-2 focus:ring-blue-500"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -73,7 +71,7 @@ function Login({ onLogin }) {
               Mật khẩu
             </label>
             <div className="relative">
-              <span className="absolute inset-y-0 left-4 flex items-center">
+              <span className="absolute inset-y-0 flex items-center left-4">
                 <FaLock className="text-blue-400" />
               </span>
               <input
@@ -82,7 +80,7 @@ function Login({ onLogin }) {
                 type="password"
                 required
                 placeholder="Mật khẩu"
-                className="w-full py-3 pl-12 pr-4 bg-gray-800/70 border-none rounded-full text-gray-100 focus:ring-2 focus:ring-blue-500"
+                className="w-full py-3 pl-12 pr-4 text-gray-100 border-none rounded-full bg-gray-800/70 focus:ring-2 focus:ring-blue-500"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -95,7 +93,7 @@ function Login({ onLogin }) {
                 id="remember-me"
                 name="remember-me"
                 type="checkbox"
-                className="h-4 w-4 text-blue-600 border-gray-600 rounded bg-gray-700"
+                className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded"
               />
               <label
                 htmlFor="remember-me"
@@ -130,16 +128,14 @@ function Login({ onLogin }) {
           <div className="flex justify-center gap-4 mt-4">
             <button
               type="button"
-              className="py-3 px-6 bg-gray-800/70 text-gray-100 rounded-full flex items-center justify-center gap-2
-                        hover:bg-gray-700 hover:scale-105 transition-transform duration-300"
+              className="flex items-center justify-center gap-2 px-6 py-3 text-gray-100 transition-transform duration-300 rounded-full bg-gray-800/70 hover:bg-gray-700 hover:scale-105"
             >
               <FaGoogle className="text-red-500" />
               Google
             </button>
             <button
               type="button"
-              className="py-3 px-6 bg-gray-800/70 text-gray-100 rounded-full flex items-center justify-center gap-2
-                        hover:bg-gray-700 hover:scale-105 transition-transform duration-300"
+              className="flex items-center justify-center gap-2 px-6 py-3 text-gray-100 transition-transform duration-300 rounded-full bg-gray-800/70 hover:bg-gray-700 hover:scale-105"
             >
               <FaFacebook className="text-blue-500" />
               Facebook
