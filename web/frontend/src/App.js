@@ -40,6 +40,19 @@ function App() {
       />
       <Router>
         <Routes>
+        <Route path="/" element={<Home />} /> {/* Your Home component */}
+        <Route path="/login" element={<Login onLogin={handleLogin} />} />
+        <Route path="/register" element={<Register onLogin={handleLogin} />} />
+        <Route
+          path="/dashboard"
+          element={
+            isAuthenticated ? (
+              <Dashboard onLogout={handleLogout} />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
           <Route 
             path="/" 
             element={isAuthenticated ? <Navigate to="/dashboard" /> : <Home />} 
@@ -87,7 +100,7 @@ function App() {
               )
             }
           />
-
+          
           {/* Redirect tất cả các route không hợp lệ về trang chủ */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>

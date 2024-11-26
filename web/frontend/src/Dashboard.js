@@ -1,10 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaSignOutAlt, FaChartLine, FaBullseye, FaSearch, FaBell, FaRegLightbulb } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
 function Dashboard({ onLogout }) {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (user && user.name) {
+      setUserName(user.name);
+    }
+  }, []);
+
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -51,7 +60,7 @@ function Dashboard({ onLogout }) {
       <div className="flex-1 p-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-white">
-            Xin chào, User!
+            Xin chào, {userName}!
           </h1>
           <div className="flex items-center space-x-4">
             <div className="relative">

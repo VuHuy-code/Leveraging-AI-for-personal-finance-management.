@@ -1,26 +1,16 @@
 [
   {
     "id": 1,
-    "name": "Huy Nguyen",
-    "email": "user@example.com",
-    "password": "$2y$10$IhLjFsyUM/Yy1KiVz6bPf.SX0Wmtg50rrOD4fqA10KfmpoWr2B77K"
+    "name": "Sữa",
+    "email": "nhihunh18@gmail.com",
+    "password": "$2a$10$GTrXHMb1JZTaePQqA0zcJO2PNrpZQqK0ws9A8y8AxHWa6bdBCitKy",
+    "createdAt": "2024-11-26T15:02:15.796Z"
   },
   {
     "id": 2,
-    "name": "Nguyen Van A",
-    "email": "a@example.com",
-    "password": "$2a$10$D1mE.y7OLzL0Zg/IR03lWeXj0rj4zcnEIE5J2uByNcDCeAIEQKvOW"
-  },
-  {
-    "id": 3,
-    "name": "Tran Thi B",
-    "email": "b@example.com",
-    "password": "$2a$10$7JuqoaI/3aShIvYxKp9DAOSFJllI8ZsdKCVXlzvOxX3Di7KRxEepG"
-  },
-  {
-    "id": 4,
-    "name": "Nguyen Van C",
+    "name": "hehe",
     "email": "admin@hehe",
-    "password": "$2y$10$IhLjFsyUM/Yy1KiVz6bPf.SX0Wmtg50rrOD4fqA10KfmpoWr2B77K"
+    "password": "$2a$10$JzzEwDV0rucL0Q9ziTeW7uPzWoirdMOFDgGG0JGG15vcawOfd2hO6",
+    "createdAt": "2024-11-26T15:02:28.538Z"
   }
 ]

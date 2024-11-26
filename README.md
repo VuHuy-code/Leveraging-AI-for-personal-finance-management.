@@ -11,6 +11,7 @@ git checkout <tên>
 
 // Web
 npm install
+vào port lấy link port 5000. Thay vào authService.js .VD: ....../api/auth
 
 // AI
 python -m venv env

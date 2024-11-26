@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaEnvelope, FaLock, FaUser, FaGoogle, FaFacebook } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaLock, FaGoogle, FaFacebook } from 'react-icons/fa';
 import { toast } from 'react-toastify';
+import authService from './services/authService';
 
-function Register() {
+function Register({ onLogin }) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     fullName: '',
@@ -28,17 +29,27 @@ function Register() {
     try {
       if (formData.password !== formData.confirmPassword) {
         toast.error('Mật khẩu không khớp!');
+        setIsLoading(false);
         return;
       }
 
-      // Giả lập API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      const response = await authService.register(
+        formData.fullName,
+        formData.email,
+        formData.password
+      );
+
+      // Save token and user data
+      authService.saveToken(response.token);
+      authService.saveUser(response.user);
+
+      // Update authentication state
+      if (onLogin) onLogin();
+
       toast.success('Đăng ký thành công!');
-      navigate('/login');
+      navigate('/dashboard');
     } catch (error) {
-      toast.error('Đã có lỗi xảy ra!');
-    } finally {
+      toast.error(error.message);
       setIsLoading(false);
     }
   };
@@ -51,12 +62,12 @@ function Register() {
             Đăng Ký
           </h2>
           <p className="mt-4 text-gray-300">
-            Đã có tài khoản?{' '}
+            Hoặc{' '}
             <button
-              onClick={() => navigate('/login')}
+              onClick={() => navigate('/')}
               className="font-medium text-blue-400 hover:text-cyan-400"
             >
-              Đăng nhập
+              quay lại trang chủ
             </button>
           </p>
         </div>
@@ -146,20 +157,20 @@ function Register() {
         <div className="mt-6">
           <p className="text-center text-gray-300">Hoặc đăng ký với</p>
           <div className="flex justify-center gap-4 mt-4">
-            <button
-              type="button"
+            <a
+              href="http://localhost:5000/api/auth/google"
               className="flex items-center justify-center gap-2 px-6 py-3 text-gray-100 transition-transform duration-300 rounded-full bg-gray-800/70 hover:bg-gray-700 hover:scale-105"
             >
               <FaGoogle className="text-red-500" />
               Google
-            </button>
-            <button
-              type="button"
+            </a>
+            <a
+              href="http://localhost:5000/api/auth/facebook"
               className="flex items-center justify-center gap-2 px-6 py-3 text-gray-100 transition-transform duration-300 rounded-full bg-gray-800/70 hover:bg-gray-700 hover:scale-105"
             >
               <FaFacebook className="text-blue-500" />
               Facebook
-            </button>
+            </a>
           </div>
         </div>
       </div>

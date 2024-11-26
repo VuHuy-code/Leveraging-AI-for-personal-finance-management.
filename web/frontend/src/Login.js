@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaEnvelope, FaLock, FaGoogle, FaFacebook } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import authService from './authService';
+import authService from './services/authService';
 
 function Login({ onLogin }) {
   const [email, setEmail] = useState('');
