@@ -1,51 +1,136 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, BackHandler } from 'react-native'; // Thêm BackHandler
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, BackHandler, ScrollView, Image, TextInput, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router'; // Dùng useRouter để điều hướng
-import { useAuth } from '../../hooks/useAuth'; // Import useAuth để sử dụng logout
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useAuth } from '../../hooks/useAuth';
 
 const Dashboard: React.FC = () => {
-  const router = useRouter(); // Khai báo router để điều hướng
-  const { logout } = useAuth(); // Lấy hàm logout từ useAuth
+  const { userData, logout, updateProfile } = useAuth();
+  const [activeTab, setActiveTab] = useState('Home');
+  const [newName, setNewName] = useState(userData?.name || '');
+  const [newAvatar, setNewAvatar] = useState(userData?.avatarUrl || '');
+  const router = useRouter();
 
   useEffect(() => {
-    // Xử lý sự kiện nhấn nút back
-    const handleBackPress = () => {
-      // Không cho phép quay lại từ Dashboard
-      return true;
-    };
-
-    // Thêm listener khi component mount
+    const handleBackPress = () => true;
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
-
-    // Dọn dẹp khi component unmount
     return () => backHandler.remove();
   }, []);
 
-  // Hàm xử lý đăng xuất
   const handleLogout = async () => {
     try {
-      await logout(); // Gọi hàm logout từ useAuth
-      router.replace('/'); // Quay về trang Home khi đăng xuất
+      await logout();
+      router.push('/');
     } catch (error) {
-      console.error('Error during logout:', error);
+      console.error('Logout failed:', error);
+    }
+  };
+
+  const handleProfileUpdate = async () => {
+    try {
+      if (!newName.trim()) {
+        Alert.alert('Invalid Input', 'Name cannot be empty.');
+        return;
+      }
+      await updateProfile(newName, newAvatar);
+      Alert.alert('Success', 'Profile updated successfully!');
+    } catch (error) {
+      console.error('Profile update failed:', error);
+      Alert.alert('Error', 'Failed to update profile.');
+    }
+  };
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'Home':
+        return (
+          <View style={styles.section}>
+            <View style={styles.profileContainer}>
+              <Image
+                source={{ uri: userData?.avatarUrl || 'https://via.placeholder.com/60' }}
+                style={styles.avatar}
+              />
+              <Text style={styles.userName}>{userData?.name}</Text>
+            </View>
+            <Text style={styles.sectionTitle}>Welcome to the Dashboard</Text>
+            <Text style={styles.sectionSubtitle}>Manage your subscriptions and finances easily.</Text>
+          </View>
+        );
+      case 'Bills':
+        return (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Upcoming Bills</Text>
+            <View style={styles.billItem}><Text>Spotify - $5.99</Text></View>
+            <View style={styles.billItem}><Text>YouTube Premium - $18.99</Text></View>
+          </View>
+        );
+      case 'Subs':
+        return (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Subscriptions</Text>
+            <Text>No subscriptions added yet.</Text>
+          </View>
+        );
+      case 'Settings':
+        return (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Profile Settings</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter new name"
+              value={newName}
+              onChangeText={setNewName}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter new avatar URL"
+              value={newAvatar}
+              onChangeText={setNewAvatar}
+            />
+            <TouchableOpacity style={styles.updateButton} onPress={handleProfileUpdate}>
+              <Text style={styles.updateButtonText}>Update Profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      default:
+        return null;
     }
   };
 
   return (
     <View style={styles.container}>
-      {/* Gradient Background */}
-      <LinearGradient
-        colors={['#4facfe', '#00f2fe']}
-        style={styles.gradientBackground}
-      >
-        <Text style={styles.welcomeText}>Welcome to Dashboard!</Text>
-        <Text style={styles.subText}>You are now logged in.</Text>
+      <LinearGradient colors={['#ffffff', '#ffffff']} style={styles.gradientBackground}>
+        <ScrollView style={styles.contentContainer}>{renderContent()}</ScrollView>
 
-        {/* Nút Log Out */}
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <Text style={styles.logoutButtonText}>Log Out</Text>
-        </TouchableOpacity>
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Home')}>
+            <Ionicons name="home" size={24} color={activeTab === 'Home' ? '#4facfe' : '#000000'} />
+            <Text style={[styles.navText, activeTab === 'Home' && styles.activeNavText]}>Home</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Bills')}>
+            <Ionicons name="document-text" size={24} color={activeTab === 'Bills' ? '#4facfe' : '#000000'} />
+            <Text style={[styles.navText, activeTab === 'Bills' && styles.activeNavText]}>Bills</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.addButtonWrapper} onPress={() => alert('Add feature coming soon!')}>
+            <LinearGradient colors={['#4facfe', '#00CED1']} style={styles.addButtonGradient}>
+              <MaterialIcons name="add-circle" size={40} color={'#ffffff'} />
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Subs')}>
+            <Ionicons name="list" size={24} color={activeTab === 'Subs' ? '#4facfe' : '#000000'} />
+            <Text style={[styles.navText, activeTab === 'Subs' && styles.activeNavText]}>Subs</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Settings')}>
+            <Ionicons name="settings" size={24} color={activeTab === 'Settings' ? '#4facfe' : '#000000'} />
+            <Text style={[styles.navText, activeTab === 'Settings' && styles.activeNavText]}>Settings</Text>
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
     </View>
   );
@@ -58,34 +143,114 @@ const styles = StyleSheet.create({
   },
   gradientBackground: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
   },
-  welcomeText: {
-    fontSize: 32,
+  contentContainer: {
+    flex: 1,
+  },
+  section: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#ffffff',
-    textAlign: 'center',
+    color: '#000000',
     marginBottom: 10,
   },
-  subText: {
-    fontSize: 18,
+  sectionSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 5,
+  },
+  billItem: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  input: {
+    backgroundColor: '#ffffff',
+    padding: 10,
+    borderRadius: 8,
+    borderColor: '#cccccc',
+    borderWidth: 1,
+    marginBottom: 15,
+  },
+  updateButton: {
+    backgroundColor: '#4facfe',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  updateButtonText: {
     color: '#ffffff',
-    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   logoutButton: {
-    marginTop: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 30,
-    borderRadius: 25,
-    backgroundColor: '#ff4d4d', // Màu đỏ cho nút Log Out
+    backgroundColor: '#ff6666',
+    padding: 10,
+    borderRadius: 8,
     alignItems: 'center',
   },
   logoutButtonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
+  },
+  profileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 15,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 25,
+    paddingVertical: 10,
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  navItem: {
+    alignItems: 'center',
+  },
+  navText: {
+    fontSize: 12,
+    color: '#000000',
+    marginTop: 5,
+  },
+  activeNavText: {
+    color: '#4facfe',
+    fontWeight: 'bold',
+  },
+  addButtonWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addButtonGradient: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
