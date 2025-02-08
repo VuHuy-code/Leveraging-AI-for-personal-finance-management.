@@ -1,35 +1,35 @@
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "../config/firebaseConfig";
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 
-// Hàm tải ảnh đại diện lên Firebase Storage
-export const uploadAvatar = async (uid: string, file: File) => {
+const storage = getStorage();
+
+export const uploadImageToStorage = async (uri: string, path: string): Promise<string> => {
   try {
-    // Kiểm tra định dạng file (chỉ cho phép ảnh)
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
-      throw new Error("File must be an image (jpg, png, gif).");
-    }
+    // Lấy blob từ URI
+    const response = await fetch(uri);
+    const blob = await response.blob();
 
-    // Kiểm tra kích thước file (ví dụ: giới hạn 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-      throw new Error("File size exceeds the 5MB limit.");
-    }
+    // Tạo reference và upload
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, blob);
 
-    // Tạo tên file duy nhất để tránh trùng lặp
-    const timestamp = Date.now(); // hoặc sử dụng một GUID
-    const fileRef = ref(storage, `avatars/${uid}_${timestamp}_${file.name}`);
-
-    // Tải file lên Firebase Storage
-    await uploadBytes(fileRef, file);
-
-    // Lấy URL tải về của file đã tải lên
-    const downloadURL = await getDownloadURL(fileRef);
-
-    // Trả về URL tải về
-    return downloadURL;
+    // Lấy download URL sau khi upload thành công
+    const downloadUrl = await getDownloadURL(storageRef);
+    return downloadUrl;
   } catch (error) {
-    console.error("Error uploading avatar:", error);
+    console.error('Error uploading image:', error);
+    throw error;
+  }
+};
+
+export const getDownloadUrl = async (path: string): Promise<string> => {
+  try {
+    const storageRef = ref(storage, path);
+    const url = await getDownloadURL(storageRef);
+    return url;
+  } catch (error) {
+    console.error('Error getting download URL:', error);
     throw error;
   }
 };

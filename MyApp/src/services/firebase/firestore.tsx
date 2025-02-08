@@ -3,15 +3,20 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../config/firebaseConfig";
 
 // Hàm lưu thông tin người dùng vào Firestore
-export const saveUserProfile = async (uid: string, name: string, avatarUrl: string) => {
+
+export const saveUserProfile = async (uid: string, name?: string, avatarUrl?: string) => {
   try {
-    // Lưu hoặc cập nhật thông tin người dùng trong Firestore
-    await setDoc(doc(db, "users", uid), { name, avatarUrl }, { merge: true });
-    console.log("User profile saved successfully!");
+    const userRef = doc(db, "users", uid);
+    
+    // Cập nhật trực tiếp thông tin có sẵn
+    await setDoc(userRef, { name, avatarUrl }, { merge: true });
+
+    console.log("User profile updated successfully!");
   } catch (error) {
     console.error("Error saving user profile:", error);
   }
 };
+
 
 // Hàm lấy thông tin người dùng từ Firestore
 export const getUserProfile = async (uid: string) => {
