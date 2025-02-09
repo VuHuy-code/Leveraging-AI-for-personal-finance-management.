@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Alert } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  TextInput,
+  ActivityIndicator,
+  Image
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
+import { pickImage, uploadImage } from './imagePermissions';
 
 interface SettingsProps {
   userData: {
@@ -17,194 +26,177 @@ const DashboardSettings: React.FC<SettingsProps> = ({ userData, onUpdateProfile,
   const [newName, setNewName] = useState(userData?.name || '');
   const [newAvatar, setNewAvatar] = useState(userData?.avatarUrl || '');
   const [isUploading, setIsUploading] = useState(false);
-  const [isEditingName, setIsEditingName] = useState(false); // Trạng thái để chỉnh sửa tên
+  const [isEditingName, setIsEditingName] = useState(false);
 
-  const handleProfileUpdate = async () => {
-    if (!newName.trim() && !newAvatar.trim()) {
-      Alert.alert('Invalid Input', 'Please provide a name or an avatar to update.');
-      return;
-    }
-
-    const updateName = newName.trim() || userData?.name;
-    const updateAvatar = newAvatar.trim() || userData?.avatarUrl;
-
+  const handleAvatarUpload = async () => {
     try {
-      await onUpdateProfile(updateName, updateAvatar);
-      Alert.alert('Success', 'Profile updated successfully!');
+      setIsUploading(true);
+      const result = await pickImage();
+      
+      if (result?.uri) {
+        const uploadedUrl = await uploadImage(result.uri);
+        if (uploadedUrl) {
+          setNewAvatar(uploadedUrl);
+          await handleProfileUpdate(newName, uploadedUrl);
+        }
+      }
     } catch (error) {
-      console.error('Profile update failed:', error);
-      Alert.alert('Error', 'Failed to update profile.');
+      Alert.alert('Error', 'Failed to update profile picture');
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const handleAvatarUpload = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted) {
-      const pickerResult = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 1,
-      });
-
-      if (pickerResult.canceled) {
-        Alert.alert('No image selected', 'You have not selected any image.');
-        return;
-      }
-
-      setIsUploading(true);
-      const imageUri = pickerResult.assets[0].uri;
-
-      if (imageUri) {
-        setNewAvatar(imageUri);
-
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
-
-        const data = new FormData();
-        data.append('file', blob, 'avatar.jpg');
-        data.append('upload_preset', 'Finance AI');
-
-        const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/dafkqfkof/image/upload`, {
-          method: 'POST',
-          body: data,
-        });
-
-        const result = await uploadResponse.json();
-        if (result.secure_url) {
-          setNewAvatar(result.secure_url);
-        } else {
-          Alert.alert('Error', 'Failed to upload image');
-        }
-      } else {
-        Alert.alert('Error', 'No URI found for the image');
-      }
-    } else {
-      Alert.alert('Permission Denied', 'You need to grant permission to access your photo library');
+  const handleProfileUpdate = async (name: string, avatarUrl: string) => {
+    try {
+      await onUpdateProfile(
+        name.trim() || userData?.name,
+        avatarUrl.trim() || userData?.avatarUrl
+      );
+      Alert.alert('Success', 'Profile updated successfully!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update profile');
     }
-    setIsUploading(false);
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Profile Settings</Text>
+      
       <View style={styles.avatarContainer}>
         <TouchableOpacity onPress={handleAvatarUpload} disabled={isUploading}>
-          <Image source={{ uri: newAvatar }} style={styles.avatar} />
-          <LinearGradient colors={['#4facfe', '#00f2fe']} style={styles.editAvatarOverlay}>
-            <Feather name="camera" size={24} color="#fff" />
-          </LinearGradient>
+          <Image 
+            source={{ uri: newAvatar || 'https://via.placeholder.com/150' }} 
+            style={styles.avatar} 
+          />
+          <View style={styles.editAvatarOverlay}>
+            {isUploading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Feather name="camera" size={24} color="#fff" />
+            )}
+          </View>
         </TouchableOpacity>
       </View>
 
-      {/* Tên và chỉnh sửa tên */}
       <View style={styles.nameContainer}>
         {!isEditingName ? (
-          <View style={styles.nameDisplay}>
+          <TouchableOpacity 
+            style={styles.nameDisplay}
+            onPress={() => setIsEditingName(true)}
+          >
             <Text style={styles.nameText}>{newName}</Text>
-            <TouchableOpacity onPress={() => setIsEditingName(true)}>
-              <Feather name="edit" size={24} color="#4facfe" />
-            </TouchableOpacity>
-          </View>
+            <Feather name="edit-2" size={20} color="#4facfe" />
+          </TouchableOpacity>
         ) : (
           <TextInput
             style={styles.input}
-            placeholder="Enter new name"
             value={newName}
             onChangeText={setNewName}
-            onBlur={() => setIsEditingName(false)} // Khi người dùng rời khỏi ô nhập tên
+            onBlur={() => setIsEditingName(false)}
+            placeholder="Enter your name"
           />
         )}
+        </View>
+  
+        <TouchableOpacity 
+          style={styles.updateButton} 
+          onPress={() => handleProfileUpdate(newName, newAvatar)}
+          disabled={isUploading}
+        >
+          <LinearGradient 
+            colors={['#4facfe', '#00f2fe']} 
+            style={styles.gradientButton}
+          >
+            <Text style={styles.updateButtonText}>
+              {isUploading ? 'Updating...' : 'Update Profile'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+  
+        <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
       </View>
-
-      <TouchableOpacity style={styles.updateButton} onPress={handleProfileUpdate} disabled={isUploading}>
-        <LinearGradient colors={['#4facfe', '#00f2fe']} style={styles.gradientButton}>
-          <Text style={styles.updateButtonText}>Update Profile</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    backgroundColor: '#f9f9f9',
-    flex: 1,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#333',
-    textAlign: 'center',
-  },
-  avatarContainer: {
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#ddd',
-  },
-  editAvatarOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-    padding: 5,
-  },
-  nameContainer: {
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  nameDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  nameText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginRight: 10,
-  },
-  input: {
-    backgroundColor: '#ffffff',
-    padding: 15,
-    borderRadius: 8,
-    borderColor: '#cccccc',
-    borderWidth: 1,
-    marginBottom: 15,
-  },
-  gradientButton: {
-    padding: 15,
-    borderRadius: 8,
-  },
-  updateButton: {
-    marginBottom: 15,
-  },
-  updateButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  logoutButton: {
-    backgroundColor: '#ff6666',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  logoutButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-});
-
-export default DashboardSettings;
+    );
+  };
+  
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: 20,
+      backgroundColor: '#f9f9f9',
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: 'bold',
+      marginBottom: 20,
+      color: '#333',
+      textAlign: 'center',
+    },
+    avatarContainer: {
+      alignSelf: 'center',
+      marginBottom: 20,
+    },
+    avatar: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: '#ddd',
+    },
+    editAvatarOverlay: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      borderRadius: 20,
+      padding: 8,
+    },
+    nameContainer: {
+      marginBottom: 20,
+      alignItems: 'center',
+    },
+    nameDisplay: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    nameText: {
+      fontSize: 18,
+      fontWeight: 'bold',
+    },
+    input: {
+      width: '100%',
+      padding: 12,
+      borderRadius: 8,
+      backgroundColor: '#fff',
+      borderWidth: 1,
+      borderColor: '#ddd',
+    },
+    updateButton: {
+      marginBottom: 15,
+    },
+    gradientButton: {
+      padding: 15,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    updateButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    logoutButton: {
+      backgroundColor: '#ff6666',
+      padding: 15,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    logoutButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+  });
+  
+  export default DashboardSettings;
