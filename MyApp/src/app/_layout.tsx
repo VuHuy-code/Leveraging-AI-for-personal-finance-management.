@@ -4,20 +4,23 @@ export default function Layout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: false, // Ẩn header cho tất cả các màn hình
+        headerShown: false,
       }}
     >
       <Stack.Screen
-        name="index" // Màn hình Home
+        name="index"
       />
       <Stack.Screen
-        name="components/Auth/login" // Màn hình Login
+        name="components/Auth/login"
       />
       <Stack.Screen
-        name="components/Auth/register" // Màn hình Register
+        name="components/Auth/register"
       />
       <Stack.Screen
-        name="components/Dashboard/dashboard" // Màn hình Dashboard
+        name="components/Dashboard/dashboard"
+      />
+      <Stack.Screen
+        name="components/Dashboard/chatbot" // Add Chatbot route
       />
     </Stack>
   );

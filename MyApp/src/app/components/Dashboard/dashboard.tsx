@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, BackHandler, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, BackHandler, ScrollView, Image, TextInput, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -8,12 +8,10 @@ import DashboardHome from './dashboardHome';
 import DashboardBills from './dashboardBills';
 import DashboardSubs from './dashboardSubs';
 import DashboardSettings from './dashboardSetting';
-import ChatBox from './dashboardChatbox'; // Import ChatBox component
 
 const Dashboard: React.FC = () => {
   const { userData, logout, updateProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('Home');
-  const [chatBoxVisible, setChatBoxVisible] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -61,9 +59,15 @@ const Dashboard: React.FC = () => {
             <Text style={[styles.navText, activeTab === 'Bills' && styles.activeNavText]}>Bills</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.addButtonWrapper} onPress={() => setChatBoxVisible(true)}>
-            <LinearGradient colors={['#4facfe', '#00CED1']} style={styles.addButtonGradient}>
-              <MaterialIcons name="add-circle" size={40} color={'#ffffff'} />
+          <TouchableOpacity 
+            style={styles.addButtonWrapper} 
+            onPress={() => router.push('components/Dashboard/chatbot' as any)}
+          >
+            <LinearGradient 
+              colors={['#4facfe', '#00CED1']} 
+              style={styles.addButtonGradient}
+            >
+              <MaterialIcons name="chat" size={40} color={'#ffffff'} />
             </LinearGradient>
           </TouchableOpacity>
 
@@ -76,9 +80,6 @@ const Dashboard: React.FC = () => {
             <Text style={[styles.navText, activeTab === 'Settings' && styles.activeNavText]}>Settings</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Chat Box Modal */}
-        <ChatBox visible={chatBoxVisible} onClose={() => setChatBoxVisible(false)} />
       </LinearGradient>
     </View>
   );
