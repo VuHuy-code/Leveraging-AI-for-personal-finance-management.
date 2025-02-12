@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
 import Groq from "groq-sdk";
 
 const groq = new Groq({
@@ -23,7 +24,7 @@ const groq = new Groq({
   dangerouslyAllowBrowser: true
 });
 
-const systemPrompt = `You are a helpful assistant. If the user's input contains expense details (e.g., a monetary amount and context about spending), please analyze and categorize the expense into only one of the following fixed categories: Di chuyển, Mua sắm, Ăn uống, Hóa đơn, Giải trí, Y tế, Giáo dục, Đầu tư & tiết kiệm, Khác. Output the response in the following format:**Phân loại: [category], Tiền: [amount]**. Định dạng của amount là xxx,xxx,xxx VNĐ. If the user's query is not expense-related, answer the question normally.`;
+const systemPrompt = `You are a helpful assistant. If the user's input contains expense details (e.g., a monetary amount and context about spending), please analyze and categorize the expense into only one of the following fixed categories: Di chuyển, Mua sắm, Ăn uống, Hóa đơn, Giải trí, Y tế, Giáo dục, Đầu tư & tiết kiệm, Khác. Output the response in the following format:**Phân loại: [category], Tiền: [amount]**. Định dạng của amount là xxx,xxx,xxx VNĐ. If the user's query is not expense-related, answer the question normally. If the user uploads an image, analyze the image and categorize the expenses if it contains any.`;
 
 interface Message {
   id: string;
@@ -47,6 +48,7 @@ const Chatbot: React.FC = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [image, setImage] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
 
@@ -58,6 +60,88 @@ const Chatbot: React.FC = () => {
     };
   }, []);
 
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Please grant camera roll access');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+      processImage(result.assets[0].uri);
+    }
+  };
+
+  const processImage = async (imageUri: string) => {
+    setIsLoading(true);
+
+    try {
+      // First, read the image file
+      const base64Image = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Create the chat completion request with the image
+      const completion = await groq.chat.completions.create({
+        messages: [
+          
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Hãy phân tích hình ảnh này và trả lời bằng tiếng Việt. Nếu có thông tin chi tiêu, hãy liệt kê các món đã mua, số lượng (nếu có), đơn giá (nếu có), thành tiền, và kết luận lại là 'Phân loại: Hóa đơn, Tiền: [tổng tiền]'." },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64Image}`,
+                }
+              }
+            ]
+          }
+        ],
+        model: "llama-3.2-90b-vision-preview",
+        temperature: 0.5,
+        max_tokens: 1024,
+      }); 
+
+      const botResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: completion.choices[0]?.message?.content || "Xin lỗi, tôi không thể xử lý hình ảnh.",
+        isUser: false,
+      };
+
+      setMessages(prev => [...prev, botResponse]);
+    } catch (error) {
+      console.error('Image processing error:', error);
+      
+      // More detailed error handling
+      let errorMessage = "Xin lỗi, đã có lỗi xảy ra khi xử lý hình ảnh.";
+      if (error instanceof Error) {
+        if (error.message.includes('413')) {
+          errorMessage += " Hình ảnh quá lớn, vui lòng chọn hình ảnh nhỏ hơn.";
+        } else if (error.message.includes('415')) {
+          errorMessage += " Định dạng hình ảnh không được hỗ trợ.";
+        }
+      }
+      
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: errorMessage,
+        isUser: false,
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const toggleRecording = async () => {
     if (isRecording && recordingRef.current) {
       try {
@@ -66,23 +150,23 @@ const Chatbot: React.FC = () => {
           allowsRecordingIOS: false,
           playsInSilentModeIOS: false,
         });
-  
+
         const uri = recordingRef.current.getURI();
         if (uri) {
           const fileInfo = await FileSystem.getInfoAsync(uri);
           if (fileInfo.exists) {
             const formData = new FormData();
-            
+
             // Explicitly type the file object
             const fileData: any = {
               uri: uri,
               name: 'audio.m4a',
               type: 'audio/m4a',
             };
-            
+
             formData.append('file', fileData);
             formData.append('model', 'whisper-large-v3');
-  
+
             try {
               const transcriptionResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
                 method: 'POST',
@@ -91,24 +175,24 @@ const Chatbot: React.FC = () => {
                 },
                 body: formData,
               });
-  
+
               if (!transcriptionResponse.ok) {
                 throw new Error(`HTTP error! status: ${transcriptionResponse.status}`);
               }
-              
+
               const transcriptionData: TranscriptionResponse = await transcriptionResponse.json();
-              
+
               if (transcriptionData && transcriptionData.text) {
                 setInput(transcriptionData.text);
               } else {
                 throw new Error('No transcription text received');
               }
-              
+
             } catch (transcriptionError) {
               console.error('Transcription error:', transcriptionError);
               Alert.alert('Error', 'Failed to transcribe audio');
             }
-  
+
             // Clean up the temporary file
             await FileSystem.deleteAsync(uri, { idempotent: true });
           }
@@ -126,18 +210,18 @@ const Chatbot: React.FC = () => {
           await recordingRef.current.stopAndUnloadAsync();
           recordingRef.current = null;
         }
-  
+
         const { status } = await Audio.requestPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert('Permission required', 'Please grant microphone access');
           return;
         }
-  
+
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
         });
-  
+
         const { recording } = await Audio.Recording.createAsync(
           Audio.RecordingOptionsPresets.HIGH_QUALITY
         );
@@ -208,7 +292,7 @@ const Chatbot: React.FC = () => {
   );
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
@@ -233,16 +317,23 @@ const Chatbot: React.FC = () => {
 
       <View style={styles.inputContainer}>
         <TouchableOpacity
+          onPress={pickImage}
+          style={styles.imageButton}
+        >
+          <Ionicons name="image" size={24} color="#666" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
           onPress={toggleRecording}
           style={styles.micButton}
         >
-          <Ionicons 
-            name={isRecording ? "mic" : "mic-outline"} 
-            size={24} 
-            color={isRecording ? "#4facfe" : "#666"} 
+          <Ionicons
+            name={isRecording ? "mic" : "mic-outline"}
+            size={24}
+            color={isRecording ? "#4facfe" : "#666"}
           />
         </TouchableOpacity>
-        
+
         <TextInput
           style={styles.input}
           value={input}
@@ -252,9 +343,9 @@ const Chatbot: React.FC = () => {
           multiline
           editable={!isLoading && !isRecording}
         />
-        
-        <TouchableOpacity 
-          style={styles.sendButton} 
+
+        <TouchableOpacity
+          style={styles.sendButton}
           onPress={sendMessage}
           disabled={!input.trim() || isLoading || isRecording}
         >
@@ -339,6 +430,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   micButton: {
+    padding: 8,
+  },
+  imageButton: {
     padding: 8,
   },
   sendButton: {
