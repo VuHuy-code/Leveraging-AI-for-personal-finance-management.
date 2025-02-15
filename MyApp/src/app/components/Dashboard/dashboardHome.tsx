@@ -1,127 +1,230 @@
-import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getUserTransactions } from '../../../services/firebase/firestore';
+import { useAuth } from '../../hooks/useAuth';
+import { useTransactionContext } from '../../contexts/TransactionContext';
 
 interface HomeProps {
   userData: {
     avatarUrl: string;
     name: string;
-  };
+  }| null; 
 }
 
+interface Transaction {
+  id: string;
+  title: string;
+  time: string;
+  amount: number;
+  type: 'expense' | 'income';
+  category: string;
+  account: string;
+}
+
+// Add this function at the top of your component, after the interfaces
+const formatCurrency = (amount: number) => {
+  // Remove decimal places and format with thousand separators
+  return Math.floor(amount).toLocaleString('vi-VN');
+};
+
 const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
-  const [isModalVisible, setModalVisible] = useState(false);
-  const [budget, setBudget] = useState(5000000);
-  const [tempBudget, setTempBudget] = useState('');
-  const income = 10000000;
-  const expenses = 5000000;
-  const remainingBudget = income - expenses;
+  const { refreshKey } = useTransactionContext();
+  const { user } = useAuth();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [totalBalance, setTotalBalance] = useState(0);
+  const [expense, setExpense] = useState(0);
+  const [income, setIncome] = useState(0);
 
-  const handleBudgetChange = () => {
-    if (tempBudget) {
-      setBudget(Number(tempBudget));
-      setTempBudget('');
-      setModalVisible(false);
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      if (!user) return;
+
+      try {
+        const userTransactions = await getUserTransactions(user.uid);
+        const formattedTransactions = userTransactions.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          time: new Date(t.createdAt?.toDate()).toLocaleString(),
+          amount: parseFloat(t.amount),
+          type: t.type,
+          category: t.category,
+          account: t.account
+        }));
+
+        // Calculate totals
+        let totalIncome = 0;
+        let totalExpense = 0;
+
+        formattedTransactions.forEach((t: Transaction) => {
+          if (t.type === 'income') {
+            totalIncome += t.amount;
+          } else {
+            totalExpense += t.amount;
+          }
+        });
+
+        setTransactions(formattedTransactions);
+        setIncome(totalIncome);
+        setExpense(totalExpense);
+        setTotalBalance(totalIncome - totalExpense);
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+      }
+    };
+
+    fetchTransactions();
+  }, [user, refreshKey]); // Add refreshKey to dependencies
+  
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'Ăn uống':
+        return 'fast-food';
+      case 'Lương tháng':
+        return 'briefcase';
+      case 'Y tế':
+        return 'medical';
+      case 'Mua sắm':
+        return 'cart';
+      case 'Di chuyển':
+        return 'car-sport';
+      case 'Hóa đơn':
+        return 'receipt';
+      case 'Giải trí':
+        return 'film';
+      case 'Giáo dục':
+        return 'school';
+      case 'Đầu tư':
+        return 'trending-up';
+      case 'Tiết kiệm':
+        return 'cash';
+      case 'khác':
+        return 'help';
+      default:
+        return 'logo-usd';
     }
-  };  
-
-  const transactions = [
-    { id: '1', description: 'Mua sắm', amount: 500000, type: 'expense' },
-    { id: '2', description: 'Lương tháng', amount: 10000000, type: 'income' },
-    { id: '3', description: 'Ăn uống', amount: 200000, type: 'expense' },
-  ];
+  };
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.profileContainer}>
-          <Image
-            source={{ uri: userData?.avatarUrl || 'https://via.placeholder.com/60' }}
-            style={styles.avatar}
-          />
-          <Text style={styles.userName}>Xin chào, {userData?.name}</Text>
-        </View>
-        <TouchableOpacity style={styles.settingsButton}>
-          <Ionicons name="settings" size={24} color="#000" />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.budgetContainer}>
-        <Text style={styles.budgetTitle}>Số tiền còn lại trong tháng</Text>
-        <Text style={styles.budgetAmount}>{budget.toLocaleString()} VNĐ</Text>
-        <View style={styles.incomeExpenseContainer}>
-          <View style={styles.incomeContainer}>
-            <Text style={styles.incomeExpenseLabel}>Thu</Text>
-            <View style={styles.amountContainer}>
-              <Ionicons name="arrow-up-circle" size={24} color="green" />
-              <Text style={[styles.incomeExpenseAmount, styles.incomeText]}>
-                {income.toLocaleString()} VNĐ
-              </Text>
+      <View style={styles.headerWrapper}>
+        <Image 
+          source={require('../../../assets/images/header-bg.png')} 
+          style={styles.headerBg}
+        />
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={styles.userInfo}>
+              {userData?.avatarUrl && (
+                <Image 
+                  source={{ uri: userData.avatarUrl }} 
+                  style={styles.avatar} 
+                />
+              )}
             </View>
-          </View>
-          <View style={styles.expenseContainer}>
-            <Text style={styles.incomeExpenseLabel}>Chi</Text>
-            <View style={styles.amountContainer}>
-              <Ionicons name="arrow-down-circle" size={24} color="red" />
-              <Text style={[styles.incomeExpenseAmount, styles.expenseText]}>
-                {expenses.toLocaleString()} VNĐ
-              </Text>
-            </View>
+            
+            <TouchableOpacity style={styles.accountSelector}>
+              <View style={styles.accountIcon}>
+                <Ionicons name="wallet-outline" size={14} color="#fff" />
+              </View>
+              <Text style={styles.accountText}>All account</Text>
+              <Ionicons name="chevron-down" size={14} color="#fff" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.notificationButton}>
+              <Ionicons name="notifications" size={20} color="#fff" />
+            </TouchableOpacity>
           </View>
         </View>
-        <TouchableOpacity 
-          style={styles.moreButton} 
-          onPress={() => setModalVisible(true)}
-        >
-          <Ionicons name="ellipsis-horizontal" size={24} color="#000" />
-        </TouchableOpacity>
+
+        <View style={styles.balanceSection}>
+          <Text style={styles.balanceLabel}>Total Balance</Text>
+          <Text style={styles.balanceAmount}>{formatCurrency(totalBalance)} VNĐ</Text>
+        </View>
+
+        <View style={styles.overviewSection}>
+          <View style={styles.overviewCard}>
+            <Text style={styles.overviewLabel}>Expense</Text>
+            <Text style={styles.overviewAmount}>{formatCurrency(expense)} VNĐ</Text>
+            <View style={styles.trendContainer}>
+              <Ionicons name="arrow-down" size={12} color="#ef4444" />
+              <Text style={styles.trendText}>13.39% in this month</Text>
+            </View>
+          </View>
+
+          <View style={styles.overviewCard}>
+            <Text style={styles.overviewLabel}>Income</Text>
+            <Text style={styles.overviewAmount}>{formatCurrency(income)} VNĐ</Text>
+            <View style={styles.trendContainer}>
+              <Ionicons name="arrow-up" size={12} color="#22c55e" />
+              <Text style={styles.trendText}>5.22% in this month</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.insightCard}>
+          <View style={styles.insightHeader}>
+            <Ionicons name="bulb" size={16} color="#d1d5db" />
+            <Text style={styles.insightTitle}>AI Insight</Text>
+          </View>
+          <Text style={styles.insightText}>
+            Great job! You've saved 20% more than last month.
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.transactionsContainer}>
-        <Text style={styles.transactionsTitle}>Giao dịch trong ngày</Text>
+      <View style={styles.transactionsSection}>
+        <View style={styles.transactionsHeader}>
+          <Text style={styles.transactionsTitle}>Transactions</Text>
+          <TouchableOpacity>
+            <Text style={styles.showAllButton}>Show All</Text>
+          </TouchableOpacity>
+        </View>
+
         {transactions.map((transaction) => (
-          <View key={transaction.id} style={styles.transactionItem}>
-            <Text style={styles.transactionDescription}>{transaction.description}</Text>
-            <Text style={transaction.type === 'income' ? styles.transactionIncome : styles.transactionExpense}>
-              {transaction.amount.toLocaleString()} VNĐ
-            </Text>
+          <View key={transaction.id} style={styles.transactionCard}>
+            <View style={[
+              styles.categoryIcon,
+              { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
+            ]}>
+              <Ionicons
+                name={getCategoryIcon(transaction.category)}
+                size={28}
+                color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
+              />
+            </View>
+            
+            <View style={styles.transactionDetails}>
+              <View>
+                <Text style={styles.transactionTitle}>{transaction.title}</Text>
+                <Text style={styles.transactionTime}>{transaction.time}</Text>
+              </View>
+              
+              <View style={styles.amountContainer}>
+                <Text style={[
+                  styles.transactionAmount,
+                  { color: transaction.type === 'income' ? '#22c55e' : '#ef4444' }
+                ]}>
+                  {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)} VNĐ
+                </Text>
+                <View style={styles.accountInfo}>
+                  <Text style={styles.accountName}>{transaction.account}</Text>
+                  <View style={[
+                    styles.typeIndicator,
+                    { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
+                  ]}>
+                    <Ionicons
+                      name={transaction.type === 'income' ? 'arrow-up' : 'arrow-down'}
+                      size={8}
+                      color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
+                    />
+                  </View>
+                </View>
+              </View>
+            </View>
           </View>
         ))}
       </View>
-
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isModalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Điều chỉnh ngân sách</Text>
-            <TextInput
-              style={styles.modalInput}
-              keyboardType="numeric"
-              placeholder="Nhập số tiền mới"
-              value={tempBudget}
-              onChangeText={setTempBudget}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.buttonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton]}
-                onPress={handleBudgetChange}
-              >
-                <Text style={styles.buttonText}>Xác nhận</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 };
@@ -129,161 +232,209 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    padding: 16,
+    backgroundColor: '#09090b',
+  },
+  headerWrapper: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 0.966,
+  },
+  headerBg: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   header: {
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 35 : 55,
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
   },
-  profileContainer: {
+  userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginRight: 10,
   },
   userName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#fff',
   },
-  settingsButton: {
+  accountSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    padding: 4,
+    paddingRight: 8,
+  },
+  accountIcon: {
+    backgroundColor: '#4f46e5',
     padding: 8,
+    borderRadius: 16,
   },
-  budgetContainer: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 20,
+  accountText: {
+    color: '#fff',
+    marginHorizontal: 8,
+    fontSize: 14,
   },
-  budgetTitle: {
+  notificationButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  balanceSection: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  balanceLabel: {
+    color: '#9ca3af',
     fontSize: 16,
-    color: '#666',
-    marginBottom: 10,
   },
-  budgetAmount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 20,
+  balanceAmount: {
+    color: '#fff',
+    fontSize: 36,
+    fontWeight: '600',
+    marginTop: 4,
   },
-  incomeExpenseContainer: {
+  overviewSection: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  incomeContainer: {
-    alignItems: 'center',
-  },
-  expenseContainer: {
-    alignItems: 'center',
-  },
-  amountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginTop: 16,
     gap: 8,
   },
-  incomeExpenseLabel: {
+  overviewCard: {
+    flex: 1,
+    backgroundColor: 'rgba(23, 23, 23, 0.5)',
+    borderRadius: 12,
+    padding: 16,
+  },
+  overviewLabel: {
+    color: '#9ca3af',
     fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
   },
-  incomeExpenseAmount: {
+  overviewAmount: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  trendContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  trendText: {
+    color: '#9ca3af',
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  insightCard: {
+    backgroundColor: 'rgba(23, 23, 23, 0.5)',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 8,
+  },
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  insightTitle: {
+    color: '#d1d5db',
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  insightText: {
+    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    marginTop: 6,
+    lineHeight: 20,
   },
-  incomeText: {
-    color: 'green',
+  transactionsSection: {
+    paddingHorizontal: 20,
+    marginTop: -40,
+    paddingBottom: 80,
   },
-  expenseText: {
-    color: 'red',
-  },
-  moreButton: {
-    position: 'absolute',
-    right: 16,
-    top: 16,
-  },
-  transactionsContainer: {
-    marginBottom: 20,
-  },
-  transactionsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 10,
-  },
-  transactionItem: {
+  transactionsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    marginBottom: 16,
   },
-  transactionDescription: {
+  transactionsTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '500',
+  },
+  showAllButton: {
+    color: '#9ca3af',
     fontSize: 16,
-    color: '#000',
   },
-  transactionIncome: {
-    fontSize: 16,
-    color: 'green',
-    fontWeight: 'bold',
+  transactionCard: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(23, 23, 23, 0.5)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
   },
-  transactionExpense: {
-    fontSize: 16,
-    color: 'red',
-    fontWeight: 'bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  categoryIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
   },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 20,
-    width: '80%',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    padding: 10,
-    width: '100%',
-    marginBottom: 20,
-  },
-  modalButtons: {
+  transactionDetails: {
+    flex: 1,
     flexDirection: 'row',
-    gap: 10,
+    justifyContent: 'space-between',
   },
-  modalButton: {
-    padding: 10,
-    borderRadius: 5,
-    width: 100,
+  transactionTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  transactionTime: {
+    color: '#9ca3af',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  amountContainer: {
+    alignItems: 'flex-end',
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  accountInfo: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 4,
   },
-  cancelButton: {
-    backgroundColor: '#ff4444',
+  accountName: {
+    color: '#9ca3af',
+    fontSize: 12,
+    marginRight: 4,
   },
-  confirmButton: {
-    backgroundColor: '#00C851',
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: 'bold',
+  typeIndicator: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

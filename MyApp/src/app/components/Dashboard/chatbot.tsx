@@ -18,19 +18,60 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import Groq from "groq-sdk";
-
+import { useAuth } from "../../hooks/useAuth";
+import { saveTransaction } from "../../../services/firebase/firestore";
+import { useTransactionContext } from '../../contexts/TransactionContext';
+import { initializeChatHistory, getChatHistory, updateChatHistory } from '../../../services/firebase/storage';
 const groq = new Groq({
   apiKey: "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",
   dangerouslyAllowBrowser: true
 });
 
-const systemPrompt = `You are a helpful assistant. If the user's input contains expense details (e.g., a monetary amount and context about spending), please analyze and categorize the expense into only one of the following fixed categories: Di chuyển, Mua sắm, Ăn uống, Hóa đơn, Giải trí, Y tế, Giáo dục, Đầu tư & tiết kiệm, Khác. Output the response in the following format:**Phân loại: [category], Tiền: [amount]**. Định dạng của amount là xxx,xxx,xxx VNĐ. If the user's query is not expense-related, answer the question normally. If the user uploads an image, analyze the image and categorize the expenses if it contains any.`;
+// Update the system prompt to remove the Loại field from output
+const systemPrompt = `You are a helpful assistant. For any input containing money-related information, determine if it's income or expense and categorize as follows:
+
+For INCOME (when receiving money), use these categories:
+- Lương tháng: for salary/wages
+- Tiết kiệm: for savings/investment returns
+- Khác: for gifts, found money, bonuses, etc.
+
+Income indicators:
+- Words like "nhận", "được", "cho", "tặng", "thưởng"
+- Getting money from family/friends
+- Finding money
+- Receiving gifts
+- Investment returns
+- Savings interest
+- Bonuses or rewards
+- Side job income
+
+For EXPENSES (when spending money), use these categories:
+- Ăn uống (for food and drinks)
+- Y tế (for medical expenses)
+- Mua sắm (for shopping)
+- Di chuyển (for transportation)
+- Hóa đơn (for bills)
+- Giải trí (for entertainment)
+- Giáo dục (for education)
+- Đầu tư (for investment)
+- Khác (for others)
+
+Output format: 
+**Phân loại: [category], Tiền: [amount] VNĐ, Tiêu đề: [short_title]**
+
+Examples:
+- Input: "mẹ cho 500k tiền ăn sáng"
+  Output: **Phân loại: Khác, Tiền: 500,000 VNĐ, Tiêu đề: Mẹ cho tiền**
+- Input: "nhận lương tháng 3 là 15 triệu"
+  Output: **Phân loại: Lương tháng, Tiền: 15,000,000 VNĐ, Tiêu đề: Lương tháng 3**
+
+For non-financial queries, answer normally.`;
 
 interface Message {
   id: string;
   text: string;
   isUser: boolean;
-  pending?: boolean;
+  timestamp: Date;
 }
 
 interface TranscriptionResponse {
@@ -42,23 +83,82 @@ interface TranscriptionResponse {
 
 const Chatbot: React.FC = () => {
   const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: 'Xin chào! Tôi có thể giúp gì cho bạn?', isUser: false },
-  ]);
+  const { user } = useAuth();
+  const { refreshTransactions } = useTransactionContext();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
 
   useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!user) return;
+
+      setIsLoadingHistory(true);
+      try {
+        // Khởi tạo với tin nhắn chào mừng
+        const welcomeMessage = {
+          id: '1',
+          text: 'Xin chào! Tôi có thể giúp gì cho bạn?',
+          isUser: false,
+          timestamp: new Date()
+        };
+
+        // Khởi tạo chat history nếu chưa tồn tại
+        initializeChatHistory(user.uid, welcomeMessage).catch(console.error);
+
+        // Lấy chat history
+        const history = await getChatHistory(user.uid);
+        if (history.length > 0) {
+          setMessages(history);
+        } else {
+          setMessages([welcomeMessage]);
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+        Alert.alert('Error', 'Không thể tải lịch sử chat');
+        // Set default welcome message if loading fails
+        setMessages([{
+          id: '1',
+          text: 'Xin chào! Tôi có thể giúp gì cho bạn?',
+          isUser: false,
+          timestamp: new Date()
+        }]);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadChatHistory();
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout')), 10000); // 10 giây timeout
+    });
+  
+    Promise.race([loadChatHistory(), timeoutPromise])
+      .catch(error => {
+        if (error.message === 'Timeout') {
+          setIsLoadingHistory(false);
+          setMessages([{
+            id: '1',
+            text: 'Xin chào! Tôi có thể giúp gì cho bạn?',
+            isUser: false,
+            timestamp: new Date()
+          }]);
+          Alert.alert('Thông báo', 'Tải lịch sử chat quá lâu, đã chuyển sang chế độ mới');
+        }
+      });
+    
     return () => {
       if (recordingRef.current) {
         recordingRef.current.stopAndUnloadAsync();
       }
     };
-  }, []);
+  }, [user]);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -81,22 +181,23 @@ const Chatbot: React.FC = () => {
   };
 
   const processImage = async (imageUri: string) => {
+    if (!user) return;
     setIsLoading(true);
 
     try {
-      // First, read the image file
       const base64Image = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      // Create the chat completion request with the image
       const completion = await groq.chat.completions.create({
         messages: [
-          
           {
             role: "user",
             content: [
-              { type: "text", text: "Hãy phân tích hình ảnh này và trả lời bằng tiếng Việt. Nếu có thông tin chi tiêu, hãy liệt kê các món đã mua, số lượng (nếu có), đơn giá (nếu có), thành tiền, và kết luận lại là 'Phân loại: Hóa đơn, Tiền: [tổng tiền]'." },
+              { 
+                type: "text", 
+                text: "Hãy phân tích hình ảnh này và trả lời bằng tiếng Việt. Nếu có thông tin về tiền bạc, hãy phân tích xem là thu nhập hay chi tiêu, liệt kê chi tiết và kết luận với format: 'Phân loại: [category], Tiền: [amount], Tiêu đề: [title], Loại: [income/expense]'" 
+              },
               {
                 type: "image_url",
                 image_url: {
@@ -109,19 +210,22 @@ const Chatbot: React.FC = () => {
         model: "llama-3.2-90b-vision-preview",
         temperature: 0.5,
         max_tokens: 1024,
-      }); 
+      });
 
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: completion.choices[0]?.message?.content || "Xin lỗi, tôi không thể xử lý hình ảnh.",
         isUser: false,
+        timestamp: new Date(),
       };
 
-      setMessages(prev => [...prev, botResponse]);
+      const updatedMessages = [...messages, botResponse];
+      setMessages(updatedMessages);
+      await updateChatHistory(user.uid, updatedMessages);
+
     } catch (error) {
       console.error('Image processing error:', error);
       
-      // More detailed error handling
       let errorMessage = "Xin lỗi, đã có lỗi xảy ra khi xử lý hình ảnh.";
       if (error instanceof Error) {
         if (error.message.includes('413')) {
@@ -135,10 +239,14 @@ const Chatbot: React.FC = () => {
         id: (Date.now() + 1).toString(),
         text: errorMessage,
         isUser: false,
+        timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorResponse]);
+      const updatedMessages = [...messages, errorResponse];
+      setMessages(updatedMessages);
+      await updateChatHistory(user.uid, updatedMessages);
     } finally {
       setIsLoading(false);
+      setImage(null);
     }
   };
 
@@ -157,7 +265,6 @@ const Chatbot: React.FC = () => {
           if (fileInfo.exists) {
             const formData = new FormData();
 
-            // Explicitly type the file object
             const fileData: any = {
               uri: uri,
               name: 'audio.m4a',
@@ -193,7 +300,6 @@ const Chatbot: React.FC = () => {
               Alert.alert('Error', 'Failed to transcribe audio');
             }
 
-            // Clean up the temporary file
             await FileSystem.deleteAsync(uri, { idempotent: true });
           }
         }
@@ -235,49 +341,94 @@ const Chatbot: React.FC = () => {
     }
   };
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+// Update the regex pattern and transaction type detection in sendMessage
+const sendMessage = async () => {
+  if (!input.trim() || isLoading || !user) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: input.trim(),
-      isUser: true,
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    text: input.trim(),
+    isUser: true,
+    timestamp: new Date(),
+  };
+
+  const updatedMessages = [...messages, userMessage];
+  setMessages(updatedMessages);
+  setInput('');
+  setIsLoading(true);
+
+  try {
+    const completion = await groq.chat.completions.create({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage.text }
+      ],
+      model: "llama-3.2-90b-vision-preview",
+      temperature: 0.5,
+      max_tokens: 1024,
+    });
+
+    const responseText = completion.choices[0]?.message?.content || "";
+    
+    
+    // Updated regex to match the new format without Loại field
+    const match = responseText.match(/Phân loại:\s*(.*?),\s*Tiền:\s*([\d,]+)\s*VNĐ,\s*Tiêu đề:\s*(.*?)(?:\s*$|\*\*)/);
+    
+    if (match) {
+      const [_, category, amount, title] = match;
+      const trimmedCategory = category.trim();
+      
+      // Determine if it's income based on category and context
+      const isIncome = 
+        trimmedCategory === 'Lương tháng' || 
+        trimmedCategory === 'Tiết kiệm' || 
+        trimmedCategory === 'Khác' ||
+        userMessage.text.toLowerCase().includes('nhận') ||
+        userMessage.text.toLowerCase().includes('được') ||
+        userMessage.text.toLowerCase().includes('cho') ||
+        userMessage.text.toLowerCase().includes('tặng') ||
+        userMessage.text.toLowerCase().includes('thưởng');
+
+      const transactionType = isIncome ? 'income' : 'expense';
+      
+      
+
+      await saveTransaction(
+        user.uid,
+        trimmedCategory,
+        amount.trim(),
+        title.trim(),
+        transactionType
+      );
+      refreshTransactions();
+    }
+
+    const botResponse: Message = {
+      id: (Date.now() + 1).toString(),
+      text: responseText,
+      isUser: false,
+      timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
+    const finalMessages = [...updatedMessages, botResponse];
+    setMessages(finalMessages);
+    await updateChatHistory(user.uid, finalMessages);
 
-    try {
-      const completion = await groq.chat.completions.create({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage.text }
-        ],
-        model: "llama-3.2-90b-vision-preview",
-        temperature: 0.5,
-        max_tokens: 1024,
-      });
-
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        text: completion.choices[0]?.message?.content || "Xin lỗi, tôi không thể xử lý yêu cầu.",
-        isUser: false,
-      };
-
-      setMessages(prev => [...prev, botResponse]);
-    } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại.",
-        isUser: false,
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  } catch (error) {
+    console.error('Chat error:', error);
+    const errorMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      text: "Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại.",
+      isUser: false,
+      timestamp: new Date(),
+    };
+    const finalMessages = [...updatedMessages, errorMessage];
+    setMessages(finalMessages);
+    await updateChatHistory(user.uid, finalMessages);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const renderMessage = ({ item }: { item: Message }) => (
     <View style={[
@@ -290,6 +441,15 @@ const Chatbot: React.FC = () => {
       ]}>{item.text}</Text>
     </View>
   );
+
+  if (isLoadingHistory) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4facfe" />
+        <Text style={styles.loadingText}>Đang tải lịch sử chat...</Text>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -447,6 +607,17 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
 });
 

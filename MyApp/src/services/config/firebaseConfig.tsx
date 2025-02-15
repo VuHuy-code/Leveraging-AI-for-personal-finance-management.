@@ -7,13 +7,13 @@ import { getStorage } from "firebase/storage"; // Import Firebase Storage
 
 // Cấu hình Firebase của bạn
 const firebaseConfig = {
-  apiKey: "AIzaSyCzYeK3vc7P2V19ZGWhHFJju3QxM4awOhk",
-  authDomain: "finance-ai-bbab1.firebaseapp.com",
-  projectId: "finance-ai-bbab1",
-  storageBucket: "finance-ai-bbab1.appspot.com", // Chỉnh sửa nếu có lỗi nhỏ ở đây
-  messagingSenderId: "1006672247865",
-  appId: "1:1006672247865:web:e53a971b5e9b12f462a1e8",
-  measurementId: "G-W2PJWQSTLE"
+  apiKey: "AIzaSyB7poj0Ubylvevl8Ge3HC_HBfMAaFAOXoA",
+  authDomain: "expoapp-4bb19.firebaseapp.com",
+  projectId: "expoapp-4bb19",
+  storageBucket: "expoapp-4bb19.firebasestorage.app",
+  messagingSenderId: "149881821864",
+  appId: "1:149881821864:web:c8a744832bdfa01a86c09d",
+  measurementId: "G-FJ1JPN5SZE"
 };
 
 // Khởi tạo Firebase app

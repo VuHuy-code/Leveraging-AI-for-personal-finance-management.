@@ -40,7 +40,8 @@
           "cameraPermission": "The app needs access to your camera.",
           "microphonePermission": true
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true
