@@ -29,6 +29,15 @@ const formatCurrency = (amount: number) => {
   return Math.floor(amount).toLocaleString('vi-VN');
 };
 
+// Add this helper function to check if a date is today
+const isToday = (timestamp: string) => {
+  const date = new Date(timestamp);
+  const today = new Date();
+  return date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear();
+};
+
 const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
   const { refreshKey } = useTransactionContext();
   const { user } = useAuth();
@@ -42,39 +51,42 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
       if (!user) return;
 
       try {
-        // Get transactions from CSV file
         const csvTransactions = await getExpensesFromCSV(user.uid);
         
-        // Convert CSV transactions to Transaction interface format and sort by timestamp (newest first)
-        const formattedTransactions = csvTransactions
+        // Filter for today's transactions only
+        const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
+        
+        // Convert and sort today's transactions
+        const formattedTransactions = todayTransactions
           .map((t) => ({
             id: `${t.timestamp}-${Math.random()}`,
             title: t.title,
-            time: new Date(t.timestamp).toLocaleString(),
+            time: new Date(t.timestamp).toLocaleString('vi-VN', {
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
             amount: parseFloat(t.amount),
             type: t.type as 'income' | 'expense',
             category: t.category,
             account: 'Cash',
-            rawTimestamp: new Date(t.timestamp).getTime() // Add this for sorting
+            rawTimestamp: new Date(t.timestamp).getTime()
           }))
-          .sort((a, b) => b.rawTimestamp - a.rawTimestamp); // Sort by timestamp, newest first
+          .sort((a, b) => b.rawTimestamp - a.rawTimestamp);
 
-        // Calculate totals
-        let totalIncome = 0;
-        let totalExpense = 0;
-
-        formattedTransactions.forEach((t: Transaction) => {
+        // Calculate today's totals
+        const todayTotals = formattedTransactions.reduce((acc, t) => {
           if (t.type === 'income') {
-            totalIncome += t.amount;
+            acc.income += t.amount;
           } else {
-            totalExpense += t.amount;
+            acc.expense += t.amount;
           }
-        });
+          return acc;
+        }, { income: 0, expense: 0 });
 
         setTransactions(formattedTransactions);
-        setIncome(totalIncome);
-        setExpense(totalExpense);
-        setTotalBalance(totalIncome - totalExpense);
+        setIncome(todayTotals.income);
+        setExpense(todayTotals.expense);
+        setTotalBalance(todayTotals.income - todayTotals.expense);
       } catch (error) {
         console.error('Error fetching transactions:', error);
       }
@@ -204,7 +216,9 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
             <View style={styles.transactionDetails}>
               <View>
                 <Text style={styles.transactionTitle}>{transaction.title}</Text>
-                <Text style={styles.transactionTime}>{transaction.time}</Text>
+                <Text style={styles.transactionTime}>
+                  {`Hôm nay ${transaction.time}`}
+                </Text>
               </View>
               
               <View style={styles.amountContainer}>

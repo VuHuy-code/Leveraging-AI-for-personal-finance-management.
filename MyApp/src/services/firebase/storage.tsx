@@ -10,6 +10,17 @@ interface Expense {
   title: string;
 }
 
+// Add transaction cache at the top with other interfaces
+interface TransactionCache {
+  transactions: Expense[];
+  timestamp: number;
+  userId: string;
+}
+
+// Add cache constants and variables
+const TRANSACTION_CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+let transactionCache: TransactionCache | null = null;
+
 // Get Firebase storage path for expenses
 const getExpenseStoragePath = (userId: string): string => {
   return `expenses/${userId}/chi_tieu.csv`;
@@ -68,6 +79,12 @@ export const saveExpenseToCSV = async (
       title: expenseData.title
     };
 
+    // Update cache if it exists
+    if (transactionCache && transactionCache.userId === userId) {
+      transactionCache.transactions.push(newExpense);
+      transactionCache.timestamp = Date.now();
+    }
+
     // Create the row data without headers
     const rowData = `${newExpense.timestamp},${newExpense.type},${newExpense.category},${newExpense.amount},${newExpense.title}\n`;
 
@@ -83,6 +100,8 @@ export const saveExpenseToCSV = async (
     console.log('Expense saved to CSV successfully');
   } catch (error) {
     console.error('Error saving expense to CSV:', error);
+    // Invalidate cache on error
+    transactionCache = null;
     throw error;
   }
 };
@@ -103,9 +122,17 @@ const parseCSVToExpenses = (csvContent: string): Expense[] => {
   }));
 };
 
-// Get expenses from CSV
+// Update the getExpensesFromCSV function to use caching
 export const getExpensesFromCSV = async (userId: string): Promise<Expense[]> => {
   if (!userId) throw new Error('User ID is required');
+
+  // Check cache first
+  if (transactionCache && 
+      transactionCache.userId === userId && 
+      Date.now() - transactionCache.timestamp < TRANSACTION_CACHE_EXPIRY) {
+    console.log('Returning cached transactions');
+    return transactionCache.transactions;
+  }
 
   const storagePath = getExpenseStoragePath(userId);
 
@@ -113,7 +140,16 @@ export const getExpensesFromCSV = async (userId: string): Promise<Expense[]> => 
     const url = await getDownloadURL(ref(getStorage(), storagePath));
     const response = await fetch(url);
     const csvContent = await response.text();
-    return parseCSVToExpenses(csvContent);
+    const transactions = parseCSVToExpenses(csvContent);
+
+    // Update cache
+    transactionCache = {
+      transactions,
+      timestamp: Date.now(),
+      userId
+    };
+
+    return transactions;
   } catch (error) {
     console.error('Error getting expenses:', error);
     return [];
