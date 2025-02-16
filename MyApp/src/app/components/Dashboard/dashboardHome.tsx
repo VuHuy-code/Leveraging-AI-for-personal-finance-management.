@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { getUserTransactions } from '../../../services/firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { useTransactionContext } from '../../contexts/TransactionContext';
-
+import { getExpensesFromCSV } from '../../../services/firebase/storage'; // Đường dẫn đến file chứa hàm getExpensesFromCSV
 interface HomeProps {
   userData: {
     avatarUrl: string;

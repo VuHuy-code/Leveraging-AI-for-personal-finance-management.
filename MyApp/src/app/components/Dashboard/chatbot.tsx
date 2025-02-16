@@ -21,7 +21,7 @@ import Groq from "groq-sdk";
 import { useAuth } from "../../hooks/useAuth";
 import { saveTransaction } from "../../../services/firebase/firestore";
 import { useTransactionContext } from '../../contexts/TransactionContext';
-import { initializeChatHistory, getChatHistory, updateChatHistory } from '../../../services/firebase/storage';
+import { initializeChatHistory, getChatHistory, updateChatHistory, saveExpenseToCSV } from '../../../services/firebase/storage';
 const groq = new Groq({
   apiKey: "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",
   dangerouslyAllowBrowser: true
@@ -370,7 +370,6 @@ const sendMessage = async () => {
 
     const responseText = completion.choices[0]?.message?.content || "";
     
-    
     // Updated regex to match the new format without Loại field
     const match = responseText.match(/Phân loại:\s*(.*?),\s*Tiền:\s*([\d,]+)\s*VNĐ,\s*Tiêu đề:\s*(.*?)(?:\s*$|\*\*)/);
     
@@ -389,17 +388,14 @@ const sendMessage = async () => {
         userMessage.text.toLowerCase().includes('tặng') ||
         userMessage.text.toLowerCase().includes('thưởng');
 
-      const transactionType = isIncome ? 'income' : 'expense';
-      
-      
-
-      await saveTransaction(
+      // Lưu thông tin chi tiêu vào file chi_tieu.csv
+      await saveExpenseToCSV(
         user.uid,
         trimmedCategory,
         amount.trim(),
-        title.trim(),
-        transactionType
+        title.trim()
       );
+
       refreshTransactions();
     }
 

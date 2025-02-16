@@ -1,6 +1,105 @@
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as FileSystem from 'expo-file-system';
 
+interface Expense {
+  category: string;
+  amount: string;
+  title: string;
+}
+
+// Get Firebase storage path for expenses
+const getExpenseStoragePath = (userId: string): string => {
+  return `expenses/${userId}/chi_tieu.csv`;
+};
+
+// Convert expenses to CSV string
+const convertExpensesToCSV = (expenses: Expense[]): string => {
+  const rows = ['category,amount,title'];
+  expenses.forEach(expense => {
+    const escapedTitle = expense.title.replace(/"/g, '""').replace(/\n/g, ' ');
+    rows.push(`${expense.category},${expense.amount},"${escapedTitle}"`);
+  });
+  return rows.join('\n');
+};
+
+// Parse CSV string back to expenses
+const parseCSVToExpenses = (csvContent: string): Expense[] => {
+  const lines = csvContent.split('\n');
+  const expenses: Expense[] = new Array(lines.length - 1);
+  let validExpenseCount = 0;
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const matches = line.match(/^([^,]+),([^,]+),(".*"|[^,]*)$/);
+    if (!matches) continue;
+
+    const [_, category, amount, quotedTitle] = matches;
+    const title = quotedTitle.startsWith('"') && quotedTitle.endsWith('"')
+      ? quotedTitle.slice(1, -1).replace(/""/g, '"')
+      : quotedTitle;
+
+    expenses[validExpenseCount++] = {
+      category,
+      amount,
+      title
+    };
+  }
+
+  return expenses.slice(0, validExpenseCount);
+};
+
+// Save expense to CSV
+export const saveExpenseToCSV = async (userId: string, category: string, amount: string, title: string): Promise<void> => {
+  if (!userId) throw new Error('User ID is required');
+
+  const storagePath = getExpenseStoragePath(userId);
+
+  try {
+    let existingExpenses: Expense[] = [];
+    try {
+      const url = await getDownloadURL(ref(getStorage(), storagePath));
+      const response = await fetch(url);
+      const csvContent = await response.text();
+      existingExpenses = parseCSVToExpenses(csvContent);
+    } catch (error) {
+      // If file doesn't exist, ignore and create a new one
+    }
+
+    // Add new expense
+    const newExpense: Expense = { category, amount, title };
+    const updatedExpenses = [...existingExpenses, newExpense];
+
+    // Convert to CSV and upload
+    const csvContent = convertExpensesToCSV(updatedExpenses);
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    await uploadBytes(ref(getStorage(), storagePath), blob);
+
+    console.log('Expense saved to CSV successfully');
+  } catch (error) {
+    console.error('Error saving expense to CSV:', error);
+    throw error;
+  }
+};
+
+// Get expenses from CSV
+export const getExpensesFromCSV = async (userId: string): Promise<Expense[]> => {
+  if (!userId) throw new Error('User ID is required');
+
+  const storagePath = getExpenseStoragePath(userId);
+
+  try {
+    const url = await getDownloadURL(ref(getStorage(), storagePath));
+    const response = await fetch(url);
+    const csvContent = await response.text();
+    return parseCSVToExpenses(csvContent);
+  } catch (error) {
+    console.error('Error getting expenses:', error);
+    return [];
+  }
+};
+
 interface ChatMessage {
   id: string;
   text: string;
