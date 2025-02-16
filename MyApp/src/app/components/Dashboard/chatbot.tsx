@@ -22,6 +22,8 @@ import { useAuth } from "../../hooks/useAuth";
 import { saveTransaction } from "../../../services/firebase/firestore";
 import { useTransactionContext } from '../../contexts/TransactionContext';
 import { initializeChatHistory, getChatHistory, updateChatHistory, saveExpenseToCSV } from '../../../services/firebase/storage';
+import Papa from 'papaparse';
+
 const groq = new Groq({
   apiKey: "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",
   dangerouslyAllowBrowser: true
@@ -363,7 +365,7 @@ const sendMessage = async () => {
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage.text }
       ],
-      model: "llama-3.2-90b-vision-preview",
+      model: "llama-3.3-70b-versatile",
       temperature: 0.5,
       max_tokens: 1024,
     });
@@ -388,13 +390,26 @@ const sendMessage = async () => {
         userMessage.text.toLowerCase().includes('tặng') ||
         userMessage.text.toLowerCase().includes('thưởng');
 
-      // Lưu thông tin chi tiêu vào file chi_tieu.csv
-      await saveExpenseToCSV(
-        user.uid,
-        trimmedCategory,
-        amount.trim(),
-        title.trim()
-      );
+      // Create CSV data using Papa.unparse
+      const csvData = Papa.unparse({
+        fields: ['category', 'amount', 'title', 'type', 'timestamp'],
+        data: [[
+          trimmedCategory,
+          amount.replace(/,/g, '').trim(),
+          title.trim(),
+          isIncome ? 'income' : 'expense',
+          new Date().toISOString()
+        ]]
+      });
+
+      // Save to CSV using the existing function but with properly formatted data
+      await saveExpenseToCSV(user.uid, {
+        category: trimmedCategory,
+        amount: amount.replace(/,/g, '').trim(),
+        title: title.trim(),
+        type: isIncome ? 'income' : 'expense',
+        timestamp: new Date().toISOString()
+      });
 
       refreshTransactions();
     }

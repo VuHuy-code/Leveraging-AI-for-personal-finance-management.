@@ -3,12 +3,6 @@ import { TransactionProvider } from './contexts/TransactionContext';
 import { useState } from 'react';
 
 export default function RootLayout() {
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const refreshTransactions = () => {
-    setRefreshKey(prev => prev + 1);
-  };
-
   return (
     <TransactionProvider>
       <Stack

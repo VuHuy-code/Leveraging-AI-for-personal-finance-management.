@@ -1,7 +1,10 @@
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as FileSystem from 'expo-file-system';
+import Papa from 'papaparse';  // Add this import at the top
 
 interface Expense {
+  timestamp: string;
+  type: string;
   category: string;
   amount: string;
   title: string;
@@ -12,75 +15,92 @@ const getExpenseStoragePath = (userId: string): string => {
   return `expenses/${userId}/chi_tieu.csv`;
 };
 
-// Convert expenses to CSV string
-const convertExpensesToCSV = (expenses: Expense[]): string => {
-  const rows = ['category,amount,title'];
+// Modify the convertExpensesToCSV function to create Excel-like CSV format
+const convertExpensesToCSV = (expenses: Expense[], isNewFile: boolean = false): string => {
+  // Add headers only for new files
+  let csvContent = isNewFile 
+    ? 'timestamp,type,category,amount,title\n' 
+    : '';
+  
+  // Add each expense as a new row
   expenses.forEach(expense => {
-    const escapedTitle = expense.title.replace(/"/g, '""').replace(/\n/g, ' ');
-    rows.push(`${expense.category},${expense.amount},"${escapedTitle}"`);
+    csvContent += `${expense.timestamp},${expense.type},${expense.category},${expense.amount},${expense.title}\n`;
   });
-  return rows.join('\n');
+  
+  return csvContent;
 };
 
-// Parse CSV string back to expenses
-const parseCSVToExpenses = (csvContent: string): Expense[] => {
-  const lines = csvContent.split('\n');
-  const expenses: Expense[] = new Array(lines.length - 1);
-  let validExpenseCount = 0;
-
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-
-    const matches = line.match(/^([^,]+),([^,]+),(".*"|[^,]*)$/);
-    if (!matches) continue;
-
-    const [_, category, amount, quotedTitle] = matches;
-    const title = quotedTitle.startsWith('"') && quotedTitle.endsWith('"')
-      ? quotedTitle.slice(1, -1).replace(/""/g, '"')
-      : quotedTitle;
-
-    expenses[validExpenseCount++] = {
-      category,
-      amount,
-      title
-    };
+// Update the saveExpenseToCSV function to append new data
+export const saveExpenseToCSV = async (
+  userId: string, 
+  expenseData: {
+    category: string;
+    amount: string;
+    title: string;
+    type: 'income' | 'expense';
+    timestamp?: string; // Optional since we'll set it if not provided
   }
-
-  return expenses.slice(0, validExpenseCount);
-};
-
-// Save expense to CSV
-export const saveExpenseToCSV = async (userId: string, category: string, amount: string, title: string): Promise<void> => {
+): Promise<void> => {
   if (!userId) throw new Error('User ID is required');
 
   const storagePath = getExpenseStoragePath(userId);
+  const storage = getStorage();
+  const fileRef = ref(storage, storagePath);
 
   try {
-    let existingExpenses: Expense[] = [];
+    let existingContent = '';
+    let isNewFile = false;
+
     try {
-      const url = await getDownloadURL(ref(getStorage(), storagePath));
+      const url = await getDownloadURL(fileRef);
       const response = await fetch(url);
-      const csvContent = await response.text();
-      existingExpenses = parseCSVToExpenses(csvContent);
+      existingContent = await response.text();
     } catch (error) {
-      // If file doesn't exist, ignore and create a new one
+      isNewFile = true;
     }
 
-    // Add new expense
-    const newExpense: Expense = { category, amount, title };
-    const updatedExpenses = [...existingExpenses, newExpense];
+    // Create new expense row
+    const newExpense: Expense = {
+      timestamp: expenseData.timestamp || new Date().toISOString(),
+      type: expenseData.type,
+      category: expenseData.category,
+      amount: expenseData.amount,
+      title: expenseData.title
+    };
 
-    // Convert to CSV and upload
-    const csvContent = convertExpensesToCSV(updatedExpenses);
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    await uploadBytes(ref(getStorage(), storagePath), blob);
+    // Create the row data without headers
+    const rowData = `${newExpense.timestamp},${newExpense.type},${newExpense.category},${newExpense.amount},${newExpense.title}\n`;
+
+    // Add headers only if it's a new file
+    const finalContent = isNewFile 
+      ? `timestamp,type,category,amount,title\n${rowData}`
+      : `${existingContent}${rowData}`;
+
+    // Upload to Firebase Storage
+    const blob = new Blob([finalContent], { type: 'text/csv' });
+    await uploadBytes(fileRef, blob);
 
     console.log('Expense saved to CSV successfully');
   } catch (error) {
     console.error('Error saving expense to CSV:', error);
     throw error;
   }
+};
+
+// Update the parseCSVToExpenses function to handle column-based format
+const parseCSVToExpenses = (csvContent: string): Expense[] => {
+  const result = Papa.parse(csvContent, {
+    header: true,
+    skipEmptyLines: true
+  });
+
+  return result.data.map((row: any) => ({
+    timestamp: row.timestamp,
+    type: row.type,
+    category: row.category,
+    amount: row.amount,
+    title: row.title
+  }));
 };
 
 // Get expenses from CSV

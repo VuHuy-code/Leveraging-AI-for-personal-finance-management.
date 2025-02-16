@@ -20,6 +20,7 @@ interface Transaction {
   type: 'expense' | 'income';
   category: string;
   account: string;
+  rawTimestamp: number; // Add this field
 }
 
 // Add this function at the top of your component, after the interfaces
@@ -41,16 +42,22 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
       if (!user) return;
 
       try {
-        const userTransactions = await getUserTransactions(user.uid);
-        const formattedTransactions = userTransactions.map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          time: new Date(t.createdAt?.toDate()).toLocaleString(),
-          amount: parseFloat(t.amount),
-          type: t.type,
-          category: t.category,
-          account: t.account
-        }));
+        // Get transactions from CSV file
+        const csvTransactions = await getExpensesFromCSV(user.uid);
+        
+        // Convert CSV transactions to Transaction interface format and sort by timestamp (newest first)
+        const formattedTransactions = csvTransactions
+          .map((t) => ({
+            id: `${t.timestamp}-${Math.random()}`,
+            title: t.title,
+            time: new Date(t.timestamp).toLocaleString(),
+            amount: parseFloat(t.amount),
+            type: t.type as 'income' | 'expense',
+            category: t.category,
+            account: 'Cash',
+            rawTimestamp: new Date(t.timestamp).getTime() // Add this for sorting
+          }))
+          .sort((a, b) => b.rawTimestamp - a.rawTimestamp); // Sort by timestamp, newest first
 
         // Calculate totals
         let totalIncome = 0;

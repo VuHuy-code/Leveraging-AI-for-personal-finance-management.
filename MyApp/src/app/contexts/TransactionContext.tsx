@@ -2,12 +2,12 @@ import React, { createContext, useContext, useState } from 'react';
 
 interface TransactionContextType {
   refreshKey: number;
-  refreshTransactions: () => void;  // Add this to match what Chatbot expects
+  refreshTransactions: () => void;
 }
 
 const TransactionContext = createContext<TransactionContextType>({
   refreshKey: 0,
-  refreshTransactions: () => {},  // Add default implementation
+  refreshTransactions: () => {},
 });
 
 export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -18,10 +18,7 @@ export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   return (
-    <TransactionContext.Provider value={{ 
-      refreshKey,
-      refreshTransactions  // Provide the function
-    }}>
+    <TransactionContext.Provider value={{ refreshKey, refreshTransactions }}>
       {children}
     </TransactionContext.Provider>
   );
