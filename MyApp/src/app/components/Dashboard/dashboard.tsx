@@ -10,15 +10,28 @@ import {
   Dimensions 
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons, MaterialCommunityIcons,FontAwesome6, AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 import DashboardHome from './dashboardHome';
 import DashboardBills from './dashboardBills';
-import DashboardSubs from './dashboardSubs';
+import DashboardSavings from './dashboardSubs';
 import DashboardSettings from './dashboardSetting';
+import { 
+  getExpensesFromCSV,
+  calculateDailyTrends
+} from '../../../services/firebase/storage';
+import { useWalletContext } from '../../contexts/WalletContext';
+import { useTransactionContext } from '../../contexts/TransactionContext';
 
 type ActionButtonType = 'expense' | 'camera' | 'income';
+
+// First, add an interface for the user data structure
+interface UserData {
+  uid: string;
+  name: string;
+  avatarUrl: string;
+}
 
 interface ButtonScales {
   [key: string]: Animated.Value;
@@ -33,8 +46,60 @@ interface ButtonPositions {
   income: Animated.ValueXY;
 }
 
+// Add these helper functions
+const isToday = (timestamp: string) => {
+  const date = new Date(timestamp);
+  const today = new Date();
+  return date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear();
+};
+
+// Add interface for totals
+interface DailyTotals {
+  income: number;
+  expense: number;
+}
+
+const getRobotIcon = (currentBalance: number, expense: number, income: number, hasTransactions: boolean, expenseTrend: number) => {
+  // Check if no transactions today
+  if (!hasTransactions) {
+    return "robot-confused-outline";
+  }
+  
+  // Check if balance is 0 or negative
+  if (currentBalance <= 0) {
+    return "robot-dead-outline";
+  }
+  
+  // Check if expense trend is increasing
+  if (expenseTrend > 0) {
+    return "robot-angry-outline";
+  }
+  
+  // Check if income is greater than expense
+  if (income > expense) {
+    return "robot-love-outline";
+  }
+  
+  // Default icon
+  return "robot-outline";
+};
+
 const Dashboard: React.FC = () => {
-  const { userData, logout, updateProfile } = useAuth();
+  const { user, userData, logout, updateProfile } = useAuth();
+  
+  // Add these context hooks
+  const { activeWallet } = useWalletContext();
+  const { refreshKey } = useTransactionContext();
+  
+  // Update userData creation
+  const userInfo: UserData | null = user && userData ? {
+    uid: user.uid,
+    name: userData.name || 'User',
+    avatarUrl: userData.avatarUrl || 'https://via.placeholder.com/150',
+  } : null;
+
   const [activeTab, setActiveTab] = useState('Home');
   const [isActionsVisible, setIsActionsVisible] = useState(false);
   const [activeAction, setActiveAction] = useState<ActionButtonType | null>(null);
@@ -180,29 +245,90 @@ const Dashboard: React.FC = () => {
     return () => backHandler.remove();
   }, []);
 
+  useEffect(() => {
+    if (!userInfo) {
+      router.push('/components/Dashboard/dashboard');
+    }
+  }, [userInfo]);
+
   const handleLogout = async () => {
     try {
       await logout();
-      router.push('/');
+      // Change this line to navigate to login screen instead of root
+      router.replace('/components/Auth/login'); // Use replace to prevent going back to dashboard
     } catch (error) {
       console.error('Logout failed:', error);
     }
   };
 
   const renderContent = () => {
+    if (!userInfo) {
+      return null; // Just return null, the useEffect above will handle the redirect
+    }
+  
     switch (activeTab) {
       case 'Home':
-        return <DashboardHome userData={userData} />;
+        return <DashboardHome userData={userInfo} />;
       case 'Bills':
-        return <DashboardBills />;
+        return <DashboardBills userData={userInfo} />;
       case 'Subs':
-        return <DashboardSubs />;
+        return <DashboardSavings userData={userInfo} />;
       case 'Settings':
-        return <DashboardSettings userData={userData} onUpdateProfile={updateProfile} onLogout={handleLogout} />;
+        return <DashboardSettings 
+          userData={userInfo} 
+          onUpdateProfile={updateProfile} 
+          onLogout={handleLogout} 
+        />;
       default:
         return null;
     }
   };
+
+  // Add these states
+  const [hasTransactions, setHasTransactions] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [expense, setExpense] = useState(0);
+  const [income, setIncome] = useState(0);
+  const [expenseTrend, setExpenseTrend] = useState(0);
+
+  // Add this useEffect to check for transactions and update states
+  useEffect(() => {
+    const checkTodayTransactions = async () => {
+      if (!user) return;
+      
+      try {
+        const csvTransactions = await getExpensesFromCSV(user.uid);
+        const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
+        setHasTransactions(todayTransactions.length > 0);
+
+        // Calculate totals with proper typing
+        const totals = todayTransactions.reduce((acc: DailyTotals, t) => {
+          if (t.type === 'income') {
+            acc.income += parseFloat(t.amount);
+          } else {
+            acc.expense += parseFloat(t.amount);
+          }
+          return acc;
+        }, { income: 0, expense: 0 });
+
+        setIncome(totals.income);
+        setExpense(totals.expense);
+
+        // Get current balance from active wallet
+        if (activeWallet) {
+          setCurrentBalance(activeWallet.currentBalance);
+        }
+
+        // Get expense trend
+        const trends = await calculateDailyTrends(user.uid);
+        setExpenseTrend(trends.expenseTrend);
+      } catch (error) {
+        console.error('Error checking transactions:', error);
+      }
+    };
+
+    checkTodayTransactions();
+  }, [user, activeWallet, refreshKey]);
 
   return (
     <View style={styles.container}>
@@ -270,11 +396,11 @@ const Dashboard: React.FC = () => {
         
         <View style={styles.bottomNav}>
           <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Home')}>
-            <Ionicons name="home" size={24} color={activeTab === 'Home' ? '#fff' : '#666'} />
+            <AntDesign name="home" size={24} color={activeTab === 'Home' ? '#fff' : '#666'} />
           </TouchableOpacity>
   
           <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Bills')}>
-            <Ionicons name="pie-chart" size={24} color={activeTab === 'Bills' ? '#fff' : '#666'} />
+            <Ionicons name="receipt-outline" size={24} color={activeTab === 'Bills' ? '#fff' : '#666'} />
           </TouchableOpacity>
   
           <TouchableOpacity 
@@ -290,16 +416,20 @@ const Dashboard: React.FC = () => {
             {...panResponder.panHandlers}
           >
             <View style={styles.plusButton}>
-              <Ionicons name="add" size={32} color="#000" />
+              <MaterialCommunityIcons 
+                name={getRobotIcon(currentBalance, expense, income, hasTransactions, expenseTrend)} 
+                size={32} 
+                color="#000" 
+              />
             </View>
           </TouchableOpacity>
   
           <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Subs')}>
-            <Ionicons name="wallet" size={24} color={activeTab === 'Subs' ? '#fff' : '#666'} />
+            <MaterialCommunityIcons name="piggy-bank-outline" size={24} color={activeTab === 'Subs' ? '#fff' : '#666'} />
           </TouchableOpacity>
   
           <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Settings')}>
-            <Ionicons name="settings" size={24} color={activeTab === 'Settings' ? '#fff' : '#666'} />
+            <AntDesign name="setting" size={24} color={activeTab === 'Settings' ? '#fff' : '#666'} />
           </TouchableOpacity>
         </View>
       </LinearGradient>

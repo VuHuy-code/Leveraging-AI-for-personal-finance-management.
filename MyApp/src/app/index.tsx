@@ -7,188 +7,211 @@ import {
   Dimensions,
   ActivityIndicator,
   BackHandler,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { FontAwesome5 } from '@expo/vector-icons';
-import { Link, router } from 'expo-router'; // Import Link và router từ expo-router
-import { useAuth } from './hooks/useAuth'; // Import useAuth hook
+import { Link, router } from 'expo-router';
+import { useAuth } from './hooks/useAuth';
+import { Ionicons } from '@expo/vector-icons';
 
-const { width } = Dimensions.get('window'); // Lấy kích thước màn hình
+const { width, height } = Dimensions.get('window');
 
 const Home: React.FC = () => {
-  const { user, loading } = useAuth(); // Sử dụng useAuth để lấy trạng thái đăng nhập
+  const { user, loading } = useAuth();
 
-  // Xử lý nút "Back" khi ở trang Home
   useEffect(() => {
     const backAction = () => {
-      // Nếu đang ở trang Home, ngăn chặn hành động "Back"
-      return true; // Trả về true để ngăn chặn hành động mặc định
+      return true;
     };
 
-    // Thêm listener cho sự kiện nhấn nút "Back"
     const backHandler = BackHandler.addEventListener(
       'hardwareBackPress',
       backAction,
     );
 
-    // Dọn dẹp listener khi component unmount
     return () => backHandler.remove();
   }, []);
 
-  // Kiểm tra trạng thái đăng nhập
   useEffect(() => {
     if (!loading && user) {
-      // Nếu người dùng đã đăng nhập, chuyển hướng đến Dashboard
-      router.replace('/components/Dashboard/dashboard'); // Sử dụng đường dẫn tương đối
+      router.replace('/components/Dashboard/dashboard');
     }
   }, [user, loading]);
 
-  // Hiển thị loading indicator nếu đang kiểm tra trạng thái đăng nhập
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4facfe" />
+        <ActivityIndicator size="large" color="#4f46e5" />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Gradient Top Section */}
-      <LinearGradient
-        colors={['#4facfe', '#00f2fe']}
-        style={styles.topSection}
-      >
-        <View style={styles.logoWrapper}>
-          <View style={styles.circleBackground}>
-            <FontAwesome5 name="rocket" size={50} color="#ffffff" />
+      <View style={styles.headerWrapper}>
+        <Image
+          source={require('../assets/images/bgg.png')}
+          style={styles.headerBg}
+        />
+        <View style={styles.content}>
+          <View style={styles.logoContainer}>
+            <LinearGradient
+              colors={['rgba(79, 70, 229, 0.1)', 'rgba(79, 70, 229, 0.2)']}
+              style={styles.logoWrapper}
+            >
+              <Ionicons name="wallet-outline" size={48} color="#4f46e5" />
+            </LinearGradient>
           </View>
-        </View>
-        <View style={styles.textContainer}>
-          <Text style={styles.welcomeText}>Welcome to</Text>
-          <Text style={styles.headerText}>Finance AI</Text>
-          <Text style={styles.subHeaderText}>Quản lí tài chính thông minh</Text>
-          <Text style={styles.subHeaderText}>với trí tuệ nhân tạo</Text>
-        </View>
-      </LinearGradient>
 
-      {/* Bottom White Section */}
-      <View style={styles.bottomSection}>
-        <View style={styles.buttonContainer}>
-          {/* Log in Button */}
-          <Link href="/components/Auth/login" asChild>
-            <TouchableOpacity style={styles.signInButton}>
-              <LinearGradient
-                colors={['#4facfe', '#00f2fe']}
-                style={styles.gradientButton}
-              >
-                <Text style={styles.buttonText}>Log in</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </Link>
+          <View style={styles.formContainer}>
+            <Text style={styles.headerText}>Finance AI</Text>
+            <Text style={styles.subHeaderText}>
+              Manage your finances smarter with AI
+            </Text>
 
-          {/* Create Account Button */}
-          <Link href="/components/Auth/register" asChild>
-            <TouchableOpacity style={styles.createAccountButton}>
-              <Text style={styles.createAccountText}>Create an account</Text>
-            </TouchableOpacity>
-          </Link>
+            <View style={styles.featuresContainer}>
+              <View style={styles.featureItem}>
+                <Ionicons name="bar-chart-outline" size={24} color="#4f46e5" />
+                <Text style={styles.featureText}>Smart Analytics</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="chatbubble-outline" size={24} color="#4f46e5" />
+                <Text style={styles.featureText}>AI Assistant</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="camera-outline" size={24} color="#4f46e5" />
+                <Text style={styles.featureText}>Receipt Scanner</Text>
+              </View>
+            </View>
+
+            {/* Update Get Started button to go to register */}
+            <Link href="/components/Auth/register" asChild>
+              <TouchableOpacity style={styles.loginButton}>
+                <LinearGradient
+                  colors={['#4f46e5', '#3d2e9c']}
+                  style={styles.gradientButton}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Text style={styles.buttonText}>Get Started</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </Link>
+
+            {/* Update second button to go to login */}
+            <Link href="/components/Auth/login" asChild>
+              <TouchableOpacity style={styles.createAccountButton}>
+                <Text style={styles.createAccountText}>Sign in</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
         </View>
       </View>
     </View>
   );
 };
 
-// Stylesheet
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#09090b',
+  },
+  headerWrapper: {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+  },
+  headerBg: {
+    position: 'absolute',
+    width: '100%',
+    height: '108%',
+    resizeMode: 'cover',
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoWrapper: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  formContainer: {
+    backgroundColor: 'rgba(23, 23, 23, 0.8)',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+  },
+  headerText: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subHeaderText: {
+    fontSize: 16,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  featuresContainer: {
+    marginBottom: 32,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  featureText: {
+    color: '#fff',
+    fontSize: 16,
+    marginLeft: 12,
+    fontWeight: '500',
+  },
+  loginButton: {
+    width: '100%',
+    marginBottom: 12,
+  },
+  gradientButton: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  createAccountButton: {
+    width: '100%',
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(79, 70, 229, 0.5)',
+    borderRadius: 12,
+  },
+  createAccountText: {
+    color: '#4f46e5',
+    fontSize: 16,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  topSection: {
-    flex: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-  },
-  logoWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  circleBackground: {
-    width: width * 0.3, // 30% chiều rộng màn hình
-    height: width * 0.3, // Đảm bảo chiều cao bằng chiều rộng
-    borderRadius: (width * 0.3) / 2, // BorderRadius bằng một nửa kích thước
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  textContainer: {
-    alignItems: 'center',
-  },
-  welcomeText: {
-    fontSize: 30,
-    color: '#ffffff',
-    fontWeight: '500',
-    letterSpacing: 1,
-  },
-  headerText: {
-    fontSize: 48,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  subHeaderText: {
-    fontSize: 18,
-    color: '#ffffff',
-    marginTop: 5,
-    letterSpacing: 0.5,
-  },
-  bottomSection: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: '5%',
-  },
-  buttonContainer: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  gradientButton: {
-    width: '100%',
-    paddingVertical: 15,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signInButton: {
-    width: '100%',
-    marginBottom: 15,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  createAccountButton: {
-    borderWidth: 1,
-    borderColor: '#4facfe',
-    width: '100%',
-    paddingVertical: 15,
-    borderRadius: 25,
-    alignItems: 'center',
-  },
-  createAccountText: {
-    color: '#4facfe',
-    fontSize: 18,
-    fontWeight: 'bold',
+    backgroundColor: '#09090b',
   },
 });
 

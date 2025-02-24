@@ -1,15 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react'; // Import useCallback
 import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons,MaterialIcons } from '@expo/vector-icons';
 import { getUserTransactions } from '../../../services/firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { useTransactionContext } from '../../contexts/TransactionContext';
-import { getExpensesFromCSV } from '../../../services/firebase/storage'; // Đường dẫn đến file chứa hàm getExpensesFromCSV
+import AIinsight from './AIinsight';
+import {
+  getExpensesFromCSV,
+  getUserBalance,
+  saveUserBalance,
+  getWallets,
+  Wallet,
+  saveWallets,
+  calculateDailyTrends,
+  updateWallet  // Add this import
+} from '../../../services/firebase/storage'; // Đường dẫn đến file chứa hàm getExpensesFromCSV
+import { useRouter } from 'expo-router';
+import WalletScreen from './wallet';
+import { useWalletContext } from '../../contexts/WalletContext'; // <--- Lấy từ context
+
+
 interface HomeProps {
   userData: {
-    avatarUrl: string;
-    name: string;
-  }| null; 
+    uid: string;
+    avatarUrl?: string;  // Make optional
+    name?: string;       // Make optional
+  };
 }
 
 interface Transaction {
@@ -39,23 +55,41 @@ const isToday = (timestamp: string) => {
 };
 
 const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
-  const { refreshKey } = useTransactionContext();
+  const router = useRouter();
+  const { refreshKey, refreshTransactions } = useTransactionContext(); // Get refreshTransactions
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totalBalance, setTotalBalance] = useState(0);
   const [expense, setExpense] = useState(0);
   const [income, setIncome] = useState(0);
+  const [isWalletModalVisible, setWalletModalVisible] = useState(false);
+  const { activeWallet, wallets } = useWalletContext();
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [expenseTrend, setExpenseTrend] = useState(0);
+  const [incomeTrend, setIncomeTrend] = useState(0);
+
+  // Use useCallback to memoize handleWalletCreate
+  const handleWalletCreate = useCallback((newBalance: number) => {
+    setCurrentBalance(newBalance);
+    refreshTransactions();
+  }, [refreshTransactions]);
+
+  useEffect(() => {
+    if (activeWallet) {
+      setCurrentBalance(activeWallet.currentBalance);
+    } else {
+      setCurrentBalance(0);
+    }
+  }, [activeWallet]); // This will run whenever the active wallet changes
 
   useEffect(() => {
     const fetchTransactions = async () => {
-      if (!user) return;
+      if (!user || !activeWallet) return;
 
       try {
         const csvTransactions = await getExpensesFromCSV(user.uid);
-        
-        // Filter for today's transactions only
         const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
-        
+
         // Convert and sort today's transactions
         const formattedTransactions = todayTransactions
           .map((t) => ({
@@ -86,15 +120,152 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
         setTransactions(formattedTransactions);
         setIncome(todayTotals.income);
         setExpense(todayTotals.expense);
-        setTotalBalance(todayTotals.income - todayTotals.expense);
+
+        // Update current balance based on today's transactions
+        if (activeWallet) {
+          const newCurrentBalance = activeWallet.balance + todayTotals.income - todayTotals.expense;
+          setCurrentBalance(newCurrentBalance);
+          
+          // Update the wallet in storage with new current balance
+          const updatedWallet = {
+            ...activeWallet,
+            currentBalance: newCurrentBalance
+          };
+          await updateWallet(user.uid, updatedWallet);
+        }
       } catch (error) {
         console.error('Error fetching transactions:', error);
       }
     };
 
     fetchTransactions();
-  }, [user, refreshKey]); // Add refreshKey to dependencies
-  
+  }, [user, refreshKey, refreshTransactions, activeWallet]);
+
+  useEffect(() => {
+    const initializeWalletBalance = async () => {
+      if (!user || !activeWallet) return;
+
+      try {
+        const wallets = await getWallets(user.uid);
+        const existingWallet = wallets.find(w => w.id === activeWallet.id);
+
+        if (existingWallet) {
+          // Set the total balance to the fixed initial balance
+          setTotalBalance(existingWallet.balance); // This is the fixed initial balance
+          
+          // Get today's transactions to calculate current balance
+          const csvTransactions = await getExpensesFromCSV(user.uid);
+          const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
+          
+          const todayTotals = todayTransactions.reduce((acc, t) => {
+            const amount = parseFloat(t.amount);
+            if (t.type === 'income') {
+              acc.income += amount;
+            } else {
+              acc.expense += amount;
+            }
+            return acc;
+          }, { income: 0, expense: 0 });
+
+          // Calculate current balance based on initial balance and today's transactions
+          const newCurrentBalance = existingWallet.balance + todayTotals.income - todayTotals.expense;
+          setCurrentBalance(newCurrentBalance);
+
+          // Update the wallet with new current balance but keep initial balance fixed
+          const updatedWallet = {
+            ...existingWallet,
+            currentBalance: newCurrentBalance,
+            // balance remains unchanged
+          };
+          await updateWallet(user.uid, updatedWallet);
+        }
+      } catch (error) {
+        console.error('Error initializing wallet balance:', error);
+      }
+    };
+
+    initializeWalletBalance();
+  }, [user, activeWallet?.id]); // Only run when user or active wallet changes
+
+  useEffect(() => {
+    const loadUserBalance = async () => {
+      if (!user) return;
+
+      const userBalance = await getUserBalance(user.uid);
+      if (userBalance) {
+        setCurrentBalance(userBalance.currentBalance);
+
+        // Check if we need to reset for new month
+        const lastReset = new Date(userBalance.lastResetDate);
+        const now = new Date();
+        if (lastReset.getMonth() !== now.getMonth() || lastReset.getFullYear() !== now.getFullYear()) {
+          await saveUserBalance(user.uid, {
+            ...userBalance,
+            currentBalance: userBalance.totalBalance,
+            lastResetDate: now.toISOString()
+          });
+          setCurrentBalance(userBalance.totalBalance);
+        }
+      }
+    };
+
+    loadUserBalance();
+  }, [user, refreshKey, refreshTransactions]); // Add refreshKey and refreshTransactions
+
+  useEffect(() => {
+    const calculateTrends = async () => {
+      if (!user) return;
+      
+      try {
+        const trends = await calculateDailyTrends(user.uid);
+        setExpenseTrend(trends.expenseTrend);
+        setIncomeTrend(trends.incomeTrend);
+      } catch (error) {
+        console.error('Error calculating trends:', error);
+      }
+    };
+
+    calculateTrends();
+  }, [user, refreshKey]); // This will update whenever transactions change
+
+  useEffect(() => {
+    if (activeWallet) {
+      setCurrentBalance(activeWallet.currentBalance);
+      
+      // Optional: Recalculate today's transactions for the new wallet
+      const fetchCurrentWalletTransactions = async () => {
+        if (!user) return;
+
+        try {
+          const csvTransactions = await getExpensesFromCSV(user.uid);
+          const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
+          
+          const todayTotals = todayTransactions.reduce((acc, t) => {
+            const amount = parseFloat(t.amount);
+            if (t.type === 'income') {
+              acc.income += amount;
+            } else {
+              acc.expense += amount;
+            }
+            return acc;
+          }, { income: 0, expense: 0 });
+
+          // Update expense and income states
+          setExpense(todayTotals.expense);
+          setIncome(todayTotals.income);
+        } catch (error) {
+          console.error('Error fetching wallet transactions:', error);
+        }
+      };
+
+      fetchCurrentWalletTransactions();
+    } else {
+      setCurrentBalance(0);
+      setExpense(0);
+      setIncome(0);
+    }
+  }, [activeWallet, user]); // Dependencies include activeWallet and user
+
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'Ăn uống':
@@ -127,38 +298,45 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.headerWrapper}>
-        <Image 
-          source={require('../../../assets/images/header-bg.png')} 
+        <Image
+          source={require('../../../assets/images/bgg.png')}
           style={styles.headerBg}
         />
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <View style={styles.userInfo}>
               {userData?.avatarUrl && (
-                <Image 
-                  source={{ uri: userData.avatarUrl }} 
-                  style={styles.avatar} 
+                <Image
+                  source={{ uri: userData.avatarUrl }}
+                  style={styles.avatar}
                 />
               )}
             </View>
-            
-            <TouchableOpacity style={styles.accountSelector}>
+
+            <TouchableOpacity
+              style={styles.accountSelector}
+              onPress={() => setWalletModalVisible(true)}
+            >
               <View style={styles.accountIcon}>
                 <Ionicons name="wallet-outline" size={14} color="#fff" />
               </View>
               <Text style={styles.accountText}>All account</Text>
               <Ionicons name="chevron-down" size={14} color="#fff" />
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.notificationButton}>
+
+            <TouchableOpacity
+              style={styles.notificationButton}
+              onPress={() => {
+              }}
+            >
               <Ionicons name="notifications" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.balanceSection}>
-          <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceAmount}>{formatCurrency(totalBalance)} VNĐ</Text>
+          <Text style={styles.balanceLabel}>Current Balance</Text>
+          <Text style={styles.balanceAmount}>{formatCurrency(currentBalance)} VNĐ</Text>
         </View>
 
         <View style={styles.overviewSection}>
@@ -166,8 +344,17 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
             <Text style={styles.overviewLabel}>Expense</Text>
             <Text style={styles.overviewAmount}>{formatCurrency(expense)} VNĐ</Text>
             <View style={styles.trendContainer}>
-              <Ionicons name="arrow-down" size={12} color="#ef4444" />
-              <Text style={styles.trendText}>13.39% in this month</Text>
+              <Ionicons 
+                name={expenseTrend > 0 ? "arrow-up" : "arrow-down"} 
+                size={12} 
+                color={expenseTrend > 0 ? "#ef4444" : "#22c55e"} 
+              />
+              <Text style={[
+                styles.trendText,
+                { color: expenseTrend > 0 ? "#ef4444" : "#22c55e" }
+              ]}>
+                {Math.abs(expenseTrend).toFixed(2)}% today
+              </Text>
             </View>
           </View>
 
@@ -175,23 +362,25 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
             <Text style={styles.overviewLabel}>Income</Text>
             <Text style={styles.overviewAmount}>{formatCurrency(income)} VNĐ</Text>
             <View style={styles.trendContainer}>
-              <Ionicons name="arrow-up" size={12} color="#22c55e" />
-              <Text style={styles.trendText}>5.22% in this month</Text>
+              <Ionicons 
+                name={incomeTrend > 0 ? "arrow-up" : "arrow-down"} 
+                size={12} 
+                color={incomeTrend > 0 ? "#22c55e" : "#ef4444"} 
+              />
+              <Text style={[
+                styles.trendText,
+                { color: incomeTrend > 0 ? "#22c55e" : "#ef4444" }
+              ]}>
+                {Math.abs(incomeTrend).toFixed(2)}% today
+              </Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.insightCard}>
-          <View style={styles.insightHeader}>
-            <Ionicons name="bulb" size={16} color="#d1d5db" />
-            <Text style={styles.insightTitle}>AI Insight</Text>
-          </View>
-          <Text style={styles.insightText}>
-            Great job! You've saved 20% more than last month.
-          </Text>
-        </View>
+        <AIinsight userData={userData} />
       </View>
 
+      {/* Temporarily hide transactions section
       <View style={styles.transactionsSection}>
         <View style={styles.transactionsHeader}>
           <Text style={styles.transactionsTitle}>Transactions</Text>
@@ -212,7 +401,7 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
                 color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
               />
             </View>
-            
+
             <View style={styles.transactionDetails}>
               <View>
                 <Text style={styles.transactionTitle}>{transaction.title}</Text>
@@ -220,7 +409,7 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
                   {`Hôm nay ${transaction.time}`}
                 </Text>
               </View>
-              
+
               <View style={styles.amountContainer}>
                 <Text style={[
                   styles.transactionAmount,
@@ -246,6 +435,14 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
           </View>
         ))}
       </View>
+      */}
+
+      <WalletScreen
+        isVisible={isWalletModalVisible}
+        onClose={() => setWalletModalVisible(false)}
+        onWalletCreate={handleWalletCreate}
+        currentBalance={activeWallet?.currentBalance || 0}
+      />
     </ScrollView>
   );
 };
@@ -258,7 +455,7 @@ const styles = StyleSheet.create({
   headerWrapper: {
     position: 'relative',
     width: '100%',
-    aspectRatio: 0.966,
+    paddingBottom: 20, // Add padding at the bottom
   },
   headerBg: {
     position: 'absolute',
@@ -299,7 +496,7 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   accountIcon: {
-    backgroundColor: '#4f46e5',
+    backgroundColor: '#1e174f',
     padding: 8,
     borderRadius: 16,
   },
@@ -327,6 +524,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 36,
     fontWeight: '600',
+    marginTop: 4,
+  },
+  totalBalanceLabel: {
+    color: '#9ca3af',
+    fontSize: 14,
     marginTop: 4,
   },
   overviewSection: {
@@ -385,7 +587,7 @@ const styles = StyleSheet.create({
   },
   transactionsSection: {
     paddingHorizontal: 20,
-    marginTop: -40,
+    marginTop: 20,
     paddingBottom: 80,
   },
   transactionsHeader: {

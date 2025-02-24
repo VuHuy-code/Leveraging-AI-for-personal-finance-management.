@@ -11,8 +11,10 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "This app uses the microphone to record your voice."
-      }
+        "NSMicrophoneUsageDescription": "This app uses the microphone to record your voice.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.thanhquy119.MyApp"
     },
     "android": {
       "adaptiveIcon": {
@@ -20,11 +22,18 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_MEDIA_LOCATION"
       ]
     },
     "web": {
@@ -41,10 +50,37 @@
           "microphonePermission": true
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-notifications",
+        {
+          "color": "#ffffff"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "5bef3b3e-b000-4347-b32e-f90b9ce84bcb"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/5bef3b3e-b000-4347-b32e-f90b9ce84bcb"
     }
   }
 }

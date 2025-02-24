@@ -1,5 +1,5 @@
 // src/services/firebase/auth.ts
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { firebaseApp } from '../config/firebaseConfig'; // Import cấu hình Firebase
 
 // Khởi tạo auth instance
@@ -31,6 +31,16 @@ export const logout = async () => {
     await signOut(auth);
   } catch (error) {
     console.error('Error logging out:', error);
+    throw error;
+  }
+};
+
+export const resetPassword = async (email: string) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return true;
+  } catch (error) {
+    console.error('Error sending password reset email:', error);
     throw error;
   }
 };

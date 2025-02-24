@@ -3,14 +3,20 @@ import { auth } from '../../services/firebase/auth';
 import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getUserProfile, saveUserProfile} from '../../services/firebase/firestore'; // Import Firestore functions
 
+interface AuthUser extends User {
+  displayName: string | null;
+  photoURL: string | null;
+}
+
 export const useAuth = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [userData, setUserData] = useState<any>(null); // Lưu thông tin người dùng
   const [loading, setLoading] = useState(true);
 
   // Theo dõi trạng thái đăng nhập và lấy dữ liệu từ Firestore
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      console.log('Auth state changed:', authUser?.uid);
       if (authUser) {
         setUser(authUser);
 
@@ -55,6 +61,8 @@ export const useAuth = () => {
         data = await getUserProfile(userCredential.user.uid);
       }
       setUserData(data);
+      
+      // The navigation will be handled by _layout.tsx through the useEffect
     } catch (error) {
       console.error('Error logging in:', error);
       throw error;
@@ -67,12 +75,13 @@ export const useAuth = () => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       setUser(userCredential.user);
 
-      // Lưu dữ liệu người dùng vào Firestore khi đăng ký
-      const defaultName = email; // Sử dụng email làm tên mặc định
+      const defaultName = email;
       const defaultAvatarUrl = 'https://i.pinimg.com/736x/8f/1c/a2/8f1ca2029e2efceebd22fa05cca423d7.jpg';
       await saveUserProfile(userCredential.user.uid, defaultName, defaultAvatarUrl);
       const data = await getUserProfile(userCredential.user.uid);
       setUserData(data);
+      
+      // The navigation will be handled by _layout.tsx through the useEffect
     } catch (error) {
       console.error('Error registering:', error);
       throw error;
@@ -85,6 +94,7 @@ export const useAuth = () => {
       await signOut(auth);
       setUser(null);
       setUserData(null);
+      // The navigation will be handled by the component using this hook
     } catch (error) {
       console.error('Error logging out:', error);
       throw error;
@@ -96,10 +106,12 @@ export const useAuth = () => {
     if (!user) return;
     try {
       await saveUserProfile(user.uid, name, avatarUrl);
+      // Fetch updated data immediately
       const updatedData = await getUserProfile(user.uid);
       setUserData(updatedData);
+      console.log('Profile updated with new avatar:', avatarUrl);
     } catch (error) {
-      console.error('Error updating user profile:', error);
+      console.error('Error updating profile:', error);
       throw error;
     }
   };

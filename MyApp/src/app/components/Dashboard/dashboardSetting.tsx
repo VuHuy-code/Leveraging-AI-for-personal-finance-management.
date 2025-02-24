@@ -7,10 +7,11 @@ import {
   Alert,
   TextInput,
   ActivityIndicator,
-  Image
+  Image,
+  ScrollView,
+  Platform
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { pickImage, uploadImage } from './imagePermissions';
 
 interface SettingsProps {
@@ -53,150 +54,253 @@ const DashboardSettings: React.FC<SettingsProps> = ({ userData, onUpdateProfile,
         name.trim() || userData?.name,
         avatarUrl.trim() || userData?.avatarUrl
       );
-      Alert.alert('Success', 'Profile updated successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to update profile');
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Profile Settings</Text>
-      
-      <View style={styles.avatarContainer}>
-        <TouchableOpacity onPress={handleAvatarUpload} disabled={isUploading}>
-          <Image 
-            source={{ uri: newAvatar || 'https://via.placeholder.com/150' }} 
-            style={styles.avatar} 
-          />
-          <View style={styles.editAvatarOverlay}>
-            {isUploading ? (
-              <ActivityIndicator color="#fff" />
+    <ScrollView style={styles.container}>
+      <View style={styles.headerWrapper}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={styles.titleContainer}>
+              <Text style={styles.headerTitle}>Settings</Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={() => {}}
+            >
+              <Ionicons name="notifications" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.profileSection}>
+          <TouchableOpacity 
+            style={styles.avatarContainer}
+            onPress={handleAvatarUpload} 
+            disabled={isUploading}
+          >
+            <Image 
+              source={{ uri: newAvatar || 'https://via.placeholder.com/150' }} 
+              style={styles.avatar} 
+            />
+            <View style={styles.editAvatarOverlay}>
+              {isUploading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Ionicons name="camera" size={20} color="#fff" />
+              )}
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.nameContainer}>
+            {!isEditingName ? (
+              <TouchableOpacity 
+                style={styles.nameDisplay}
+                onPress={() => setIsEditingName(true)}
+              >
+                <Text style={styles.nameText}>{newName}</Text>
+                <Ionicons name="pencil" size={16} color="#4f46e5" />
+              </TouchableOpacity>
             ) : (
-              <Feather name="camera" size={24} color="#fff" />
+              <TextInput
+                style={styles.input}
+                value={newName}
+                onChangeText={setNewName}
+                onBlur={async () => {
+                  setIsEditingName(false);
+                  if (newName !== userData?.name) {
+                    await handleProfileUpdate(newName, newAvatar);
+                  }
+                }}
+                onEndEditing={async () => {
+                  setIsEditingName(false);
+                  if (newName !== userData?.name) {
+                    await handleProfileUpdate(newName, newAvatar);
+                  }
+                }}
+                placeholder="Enter your name"
+                placeholderTextColor="#666"
+              />
             )}
           </View>
-        </TouchableOpacity>
+        </View>
       </View>
 
-      <View style={styles.nameContainer}>
-        {!isEditingName ? (
-          <TouchableOpacity 
-            style={styles.nameDisplay}
-            onPress={() => setIsEditingName(true)}
-          >
-            <Text style={styles.nameText}>{newName}</Text>
-            <Feather name="edit-2" size={20} color="#4facfe" />
+      <View style={styles.settingsSection}>
+        <View style={styles.settingCard}>
+          <Text style={styles.settingTitle}>Account Settings</Text>
+          
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <Ionicons name="notifications-outline" size={20} color="#4f46e5" />
+            </View>
+            <Text style={styles.settingText}>Notifications</Text>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
-        ) : (
-          <TextInput
-            style={styles.input}
-            value={newName}
-            onChangeText={setNewName}
-            onBlur={() => setIsEditingName(false)}
-            placeholder="Enter your name"
-          />
-        )}
+
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <Ionicons name="lock-closed-outline" size={20} color="#4f46e5" />
+            </View>
+            <Text style={styles.settingText}>Privacy</Text>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingItem}>
+            <View style={styles.settingIcon}>
+              <Ionicons name="help-circle-outline" size={20} color="#4f46e5" />
+            </View>
+            <Text style={styles.settingText}>Help & Support</Text>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
         </View>
-  
-        <TouchableOpacity 
-          style={styles.updateButton} 
-          onPress={() => handleProfileUpdate(newName, newAvatar)}
-          disabled={isUploading}
-        >
-          <LinearGradient 
-            colors={['#4facfe', '#00f2fe']} 
-            style={styles.gradientButton}
-          >
-            <Text style={styles.updateButtonText}>
-              {isUploading ? 'Updating...' : 'Update Profile'}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
-  
+
         <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
+          <Ionicons name="log-out-outline" size={20} color="#ef4444" />
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>
-    );
-  };
-  
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      padding: 20,
-      backgroundColor: '#f9f9f9',
-    },
-    title: {
-      fontSize: 26,
-      fontWeight: 'bold',
-      marginBottom: 20,
-      color: '#333',
-      textAlign: 'center',
-    },
-    avatarContainer: {
-      alignSelf: 'center',
-      marginBottom: 20,
-    },
-    avatar: {
-      width: 120,
-      height: 120,
-      borderRadius: 60,
-      backgroundColor: '#ddd',
-    },
-    editAvatarOverlay: {
-      position: 'absolute',
-      bottom: 0,
-      right: 0,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      borderRadius: 20,
-      padding: 8,
-    },
-    nameContainer: {
-      marginBottom: 20,
-      alignItems: 'center',
-    },
-    nameDisplay: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-    },
-    nameText: {
-      fontSize: 18,
-      fontWeight: 'bold',
-    },
-    input: {
-      width: '100%',
-      padding: 12,
-      borderRadius: 8,
-      backgroundColor: '#fff',
-      borderWidth: 1,
-      borderColor: '#ddd',
-    },
-    updateButton: {
-      marginBottom: 15,
-    },
-    gradientButton: {
-      padding: 15,
-      borderRadius: 8,
-      alignItems: 'center',
-    },
-    updateButtonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: 'bold',
-    },
-    logoutButton: {
-      backgroundColor: '#ff6666',
-      padding: 15,
-      borderRadius: 8,
-      alignItems: 'center',
-    },
-    logoutButtonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: 'bold',
-    },
-  });
-  
-  export default DashboardSettings;
+    </ScrollView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#09090b',
+  },
+  headerWrapper: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 1.5,
+  },
+  header: {
+    width: '100%',
+  },
+  headerBg: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 35 : 55,
+  },
+  titleContainer: {
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  notificationButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  profileSection: {
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  avatarContainer: {
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: '#4f46e5',
+  },
+  editAvatarOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#4f46e5',
+    borderRadius: 15,
+    padding: 8,
+  },
+  nameContainer: {
+    alignItems: 'center',
+  },
+  nameDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  nameText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  input: {
+    minWidth: 200,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  settingsSection: {
+    padding: 20,
+    marginTop: -20,
+  },
+  settingCard: {
+    backgroundColor: 'rgba(23, 23, 23, 0.5)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#9ca3af',
+    marginBottom: 16,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  settingIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  settingText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#fff',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    gap: 8,
+  },
+  logoutButtonText: {
+    color: '#ef4444',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+export default DashboardSettings;
