@@ -9,6 +9,7 @@ export interface Wallet {
   currentBalance: number; // This is the daily running balance
   createdAt: string;
   lastResetDate: string;
+  lastProcessedTime?: number; // Add this field
   isActive: boolean;
 }
 

@@ -13,7 +13,7 @@ import {
   Wallet,
   saveWallets,
   calculateDailyTrends,
-  updateWallet  // Add this import
+  updateWallet,
 } from '../../../services/firebase/storage'; // Đường dẫn đến file chứa hàm getExpensesFromCSV
 import { useRouter } from 'expo-router';
 import WalletScreen from './wallet';
@@ -59,38 +59,31 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
   const { refreshKey, refreshTransactions } = useTransactionContext(); // Get refreshTransactions
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [totalBalance, setTotalBalance] = useState(0);
+  const [totalBalance, setTotalBalance] = useState(0); // Initial/fixed balance
+  const [currentBalance, setCurrentBalance] = useState(0); // Current balance after today's transactions
   const [expense, setExpense] = useState(0);
   const [income, setIncome] = useState(0);
   const [isWalletModalVisible, setWalletModalVisible] = useState(false);
   const { activeWallet, wallets } = useWalletContext();
-  const [currentBalance, setCurrentBalance] = useState(0);
   const [expenseTrend, setExpenseTrend] = useState(0);
   const [incomeTrend, setIncomeTrend] = useState(0);
 
   // Use useCallback to memoize handleWalletCreate
   const handleWalletCreate = useCallback((newBalance: number) => {
-    setCurrentBalance(newBalance);
     refreshTransactions();
   }, [refreshTransactions]);
 
+  // SIMPLIFIED LOGIC: Single useEffect to handle wallet and balance updates
   useEffect(() => {
-    if (activeWallet) {
-      setCurrentBalance(activeWallet.currentBalance);
-    } else {
-      setCurrentBalance(0);
-    }
-  }, [activeWallet]); // This will run whenever the active wallet changes
-
-  useEffect(() => {
-    const fetchTransactions = async () => {
+    const loadWalletAndTransactions = async () => {
       if (!user || !activeWallet) return;
-
+  
       try {
+        // 1. Get all transactions for today
         const csvTransactions = await getExpensesFromCSV(user.uid);
         const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
-
-        // Convert and sort today's transactions
+  
+        // Format and set all today's transactions for display
         const formattedTransactions = todayTransactions
           .map((t) => ({
             id: `${t.timestamp}-${Math.random()}`,
@@ -106,112 +99,77 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
             rawTimestamp: new Date(t.timestamp).getTime()
           }))
           .sort((a, b) => b.rawTimestamp - a.rawTimestamp);
-
-        // Calculate today's totals
-        const todayTotals = formattedTransactions.reduce((acc, t) => {
+        
+        setTransactions(formattedTransactions);
+  
+        // Calculate and display ALL of today's totals
+        const allTodayTotals = todayTransactions.reduce((acc, t) => {
+          const amount = parseFloat(t.amount);
           if (t.type === 'income') {
-            acc.income += t.amount;
+            acc.income += amount;
           } else {
-            acc.expense += t.amount;
+            acc.expense += amount;
           }
           return acc;
         }, { income: 0, expense: 0 });
-
-        setTransactions(formattedTransactions);
-        setIncome(todayTotals.income);
-        setExpense(todayTotals.expense);
-
-        // Update current balance based on today's transactions
-        if (activeWallet) {
-          const newCurrentBalance = activeWallet.balance + todayTotals.income - todayTotals.expense;
-          setCurrentBalance(newCurrentBalance);
+        
+        // Set income and expense from all today's transactions
+        setIncome(allTodayTotals.income);
+        setExpense(allTodayTotals.expense);
+  
+        // Get the last processed transaction timestamp from the wallet
+        const lastProcessedTime = activeWallet.lastProcessedTime || 0;
+        
+        // Only count UNPROCESSED transactions for balance updates
+        const unprocessedTransactions = todayTransactions.filter(
+          t => new Date(t.timestamp).getTime() > lastProcessedTime
+        );
+  
+        // Calculate balance changes from unprocessed transactions only
+        const unprocessedTotals = unprocessedTransactions.reduce((acc, t) => {
+          const amount = parseFloat(t.amount);
+          if (t.type === 'income') {
+            acc.income += amount;
+          } else {
+            acc.expense += amount;
+          }
+          return acc;
+        }, { income: 0, expense: 0 });
+        
+        // 4. Set the initial/fixed balance
+        setTotalBalance(activeWallet.balance);
+        
+        // 5. Calculate and update the current balance based on only new transactions
+        const newCurrentBalance = activeWallet.currentBalance + unprocessedTotals.income - unprocessedTotals.expense;
+        setCurrentBalance(newCurrentBalance);
+        
+        // 6. Update wallet in storage only if there are unprocessed transactions
+        if (unprocessedTotals.income > 0 || unprocessedTotals.expense > 0) {
+          let latestTimestamp = lastProcessedTime;
           
-          // Update the wallet in storage with new current balance
+          if (unprocessedTransactions.length > 0) {
+            latestTimestamp = Math.max(
+              ...unprocessedTransactions.map(t => new Date(t.timestamp).getTime()),
+              lastProcessedTime
+            );
+          }
+          
           const updatedWallet = {
             ...activeWallet,
-            currentBalance: newCurrentBalance
-          };
-          await updateWallet(user.uid, updatedWallet);
-        }
-      } catch (error) {
-        console.error('Error fetching transactions:', error);
-      }
-    };
-
-    fetchTransactions();
-  }, [user, refreshKey, refreshTransactions, activeWallet]);
-
-  useEffect(() => {
-    const initializeWalletBalance = async () => {
-      if (!user || !activeWallet) return;
-
-      try {
-        const wallets = await getWallets(user.uid);
-        const existingWallet = wallets.find(w => w.id === activeWallet.id);
-
-        if (existingWallet) {
-          // Set the total balance to the fixed initial balance
-          setTotalBalance(existingWallet.balance); // This is the fixed initial balance
-          
-          // Get today's transactions to calculate current balance
-          const csvTransactions = await getExpensesFromCSV(user.uid);
-          const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
-          
-          const todayTotals = todayTransactions.reduce((acc, t) => {
-            const amount = parseFloat(t.amount);
-            if (t.type === 'income') {
-              acc.income += amount;
-            } else {
-              acc.expense += amount;
-            }
-            return acc;
-          }, { income: 0, expense: 0 });
-
-          // Calculate current balance based on initial balance and today's transactions
-          const newCurrentBalance = existingWallet.balance + todayTotals.income - todayTotals.expense;
-          setCurrentBalance(newCurrentBalance);
-
-          // Update the wallet with new current balance but keep initial balance fixed
-          const updatedWallet = {
-            ...existingWallet,
             currentBalance: newCurrentBalance,
-            // balance remains unchanged
+            lastProcessedTime: latestTimestamp
           };
           await updateWallet(user.uid, updatedWallet);
         }
       } catch (error) {
-        console.error('Error initializing wallet balance:', error);
+        console.error('Error loading wallet and transactions:', error);
       }
     };
 
-    initializeWalletBalance();
-  }, [user, activeWallet?.id]); // Only run when user or active wallet changes
+    loadWalletAndTransactions();
+  }, [user, activeWallet, refreshKey, refreshTransactions]);
 
-  useEffect(() => {
-    const loadUserBalance = async () => {
-      if (!user) return;
-
-      const userBalance = await getUserBalance(user.uid);
-      if (userBalance) {
-        setCurrentBalance(userBalance.currentBalance);
-
-        // Check if we need to reset for new month
-        const lastReset = new Date(userBalance.lastResetDate);
-        const now = new Date();
-        if (lastReset.getMonth() !== now.getMonth() || lastReset.getFullYear() !== now.getFullYear()) {
-          await saveUserBalance(user.uid, {
-            ...userBalance,
-            currentBalance: userBalance.totalBalance,
-            lastResetDate: now.toISOString()
-          });
-          setCurrentBalance(userBalance.totalBalance);
-        }
-      }
-    };
-
-    loadUserBalance();
-  }, [user, refreshKey, refreshTransactions]); // Add refreshKey and refreshTransactions
-
+  // Separate useEffect for trends calculation
   useEffect(() => {
     const calculateTrends = async () => {
       if (!user) return;
@@ -226,45 +184,7 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
     };
 
     calculateTrends();
-  }, [user, refreshKey]); // This will update whenever transactions change
-
-  useEffect(() => {
-    if (activeWallet) {
-      setCurrentBalance(activeWallet.currentBalance);
-      
-      // Optional: Recalculate today's transactions for the new wallet
-      const fetchCurrentWalletTransactions = async () => {
-        if (!user) return;
-
-        try {
-          const csvTransactions = await getExpensesFromCSV(user.uid);
-          const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
-          
-          const todayTotals = todayTransactions.reduce((acc, t) => {
-            const amount = parseFloat(t.amount);
-            if (t.type === 'income') {
-              acc.income += amount;
-            } else {
-              acc.expense += amount;
-            }
-            return acc;
-          }, { income: 0, expense: 0 });
-
-          // Update expense and income states
-          setExpense(todayTotals.expense);
-          setIncome(todayTotals.income);
-        } catch (error) {
-          console.error('Error fetching wallet transactions:', error);
-        }
-      };
-
-      fetchCurrentWalletTransactions();
-    } else {
-      setCurrentBalance(0);
-      setExpense(0);
-      setIncome(0);
-    }
-  }, [activeWallet, user]); // Dependencies include activeWallet and user
+  }, [user, refreshKey]);
 
   const getCategoryIcon = (category: string) => {
     switch (category) {

@@ -62,20 +62,32 @@ const AIinsight: React.FC<AIinsightProps> = ({ userData }) => {
 
   const generateInsight = async (expenses: any[]) => {
     try {
-      const expensesData = expenses.map(expense => 
-        `Date: ${new Date(expense.timestamp).toLocaleDateString()}, Category: ${expense.category}, Amount: ${expense.amount} VND, Title: ${expense.title}`
-      ).join('\n');
+      const expensesData = expenses
+        .filter(exp => exp.type === 'expense')
+        .map(expense => 
+          `Chi tiêu: Date: ${new Date(expense.timestamp).toLocaleDateString()}, Category: ${expense.category}, Amount: ${expense.amount} VND, Title: ${expense.title}`
+        ).join('\n');
 
-      const prompt = `Dựa trên dữ liệu chi tiêu sau, vui lòng phân tích xu hướng chi tiêu và cung cấp lời khuyên tài chính ngắn gọn bằng tiếng Việt:
+      const incomeData = expenses
+        .filter(exp => exp.type === 'income')
+        .map(income => 
+          `Thu nhập: Date: ${new Date(income.timestamp).toLocaleDateString()}, Category: ${income.category}, Amount: ${income.amount} VND, Title: ${income.title}`
+        ).join('\n');
 
+      const prompt = `Dựa trên dữ liệu thu chi sau, vui lòng phân tích xu hướng và cung cấp lời khuyên tài chính ngắn gọn bằng tiếng Việt:
+
+      THU NHẬP:
+      ${incomeData}
+
+      CHI TIÊU:
       ${expensesData}
 
-      Please consider:
-        1. Categories with highest spending
-        2. Unnecessary expenses
-        3. Spending patterns
-        4. Suggestions for saving money
-      `;
+      Hãy phân tích:
+      1. So sánh tổng thu nhập và chi tiêu
+      2. Các danh mục chi tiêu cao nhất
+      3. Chi tiêu không cần thiết có thể cắt giảm
+      4. Xu hướng thu chi
+      5. Đề xuất cách quản lý tài chính hiệu quả hơn`;
 
       const completion = await groq.chat.completions.create({
         messages: [

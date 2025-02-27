@@ -34,7 +34,10 @@ import {
   getMonthlyExpenses,
   getQuarterlyExpenses,
   getYearlyExpenses,
-  getRecentMessages
+  getRecentMessages,
+  getSavingGoals,
+  saveSavingGoals,
+  SavingGoal
 } from '../../../services/firebase/storage';
 
 interface Expense {
@@ -44,6 +47,7 @@ interface Expense {
   amount: string;
   title: string;
 }
+
 
 // Add these missing helper functions to filter expenses by date/month:
 async function getExpensesForDate(userId: string, date: Date): Promise<Expense[]> {
@@ -62,13 +66,77 @@ async function getExpensesForMonth(userId: string, year: number, month: number):
   });
 }
 
+const SAVING_KEYWORDS = [
+  'tiết kiệm',
+  'để dành',
+  'mục tiêu',
+  'target',
+  'saving',
+  'quỹ',
+  'fund'
+];
+
+const isSavingRequest = (text: string): boolean => {
+  const normalizedText = text.toLowerCase();
+  return SAVING_KEYWORDS.some(keyword => normalizedText.includes(keyword));
+};
+
+const extractSavingGoalInfo = (text: string) => {
+  // Mẫu regex để tìm số tiền
+  const amountPattern = /(\d+([.,]\d+)?)\s*(tr|triệu|m|k|nghìn|đồng|vnd)/i;
+  const amount = text.match(amountPattern);
+
+  // Chuyển đổi số tiền về dạng số
+  const convertAmount = (value: string, unit: string): number => {
+    const baseValue = parseFloat(value.replace(',', '.'));
+    switch (unit.toLowerCase()) {
+      case 'tr':
+      case 'triệu':
+      case 'm':
+        return baseValue * 1000000;
+      case 'k':
+      case 'nghìn':
+        return baseValue * 1000;
+      default:
+        return baseValue;
+    }
+  };
+
+  let goalAmount = 0;
+  if (amount) {
+    goalAmount = convertAmount(amount[1], amount[3]);
+  }
+
+  // Tìm tên mục tiêu tiết kiệm
+  const commonGoals = [
+    { name: 'Thiết bị công nghệ', keywords: ['laptop', 'máy tính'] },
+    { name: 'Du lịch', keywords: ['du lịch', 'nghỉ dưỡng', 'holiday', 'travel'] },
+    { name: 'Phương tiện', keywords: ['xe', 'ô tô', 'car'] },
+    { name: 'Nhà', keywords: ['nhà', 'house', 'căn hộ'] },
+    { name: 'Y tế', keywords: ['khẩn cấp', 'emergency', 'dự phòng'] },
+    { name: 'Giáo dục', keywords: ['học', 'education', 'trường'] }
+  ];
+
+  const text_lower = text.toLowerCase();
+  const matchedGoal = commonGoals.find(goal => 
+    goal.keywords.some(keyword => text_lower.includes(keyword))
+  );
+
+  return {
+    name: matchedGoal?.name || 'General Savings',
+    goal: goalAmount,
+    current: 0,
+    targetDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString() // 6 tháng từ hiện tại
+  };
+};
+
 // Khởi tạo Groq
 const groq = new Groq({
   apiKey: "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",
   dangerouslyAllowBrowser: true
 });
 
-const baseSystemPrompt = `Bạn là trợ lý tài chính thông minh, nhiệm vụ chính là giúp người dùng theo dõi thu chi. Hãy phân tích và phản hồi ngắn gọn,  súc tích.
+const baseSystemPrompt = `Bạn là trợ lý tài chính thông minh, nhiệm vụ chính là giúp người dùng theo dõi thu chi. Hãy phân tích và phản hồi ngắn gọn, súc tích.
 PHÂN LOẠI:
 THU NHẬP:
 - Lương tháng: lương, thưởng công việc
@@ -77,12 +145,12 @@ THU NHẬP:
 CHI TIÊU:
 - Ăn uống:
 - Y tế: thuốc
-- Mua sắm:sàn thương mại điện tử
-- Di chuyển: xăng,du lịch  
-- Hóa đơn:
-- Giải trí: phim, game
+- Mua sắm:sàn thương mại điện tử, có từ mua, những gì liên quan đến mua sắm.
+- Di chuyển: xăng,du lịch,...  
+- Hóa đơn:Những từ liên quan đến hóa đơn.
+- Giải trí: phim, game,...
 - Giáo dục: học phí, sách vở
-- Đầu tư: chứng khoán, tiết kiệm
+- Đầu tư: chứng khoán, tiết kiệm,...
 - Khác: chi phí phát sinh
 Output format: 
 **Phân loại: [category], Tiền: [amount] VNĐ, Tiêu đề: [short_title]** sau phần này là thêm lời văn của bạn cho người dùng nếu thấy khoảng chi hợp lí thì sao đó tùy bạn còn nếu thấy không hợp lý thì chửi người dùng cho tôi.
@@ -112,23 +180,20 @@ const Chatbot: React.FC = () => {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
-  const [pressStartTime, setPressStartTime] = useState<number>(0);
-  const [isLongPress, setIsLongPress] = useState(false);
-  const [recordingMode, setRecordingMode] = useState<'tap' | 'hold' | null>(null);
-
-  const flatListRef = useRef<FlatList>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const durationTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const longPressTimeout = useRef<NodeJS.Timeout>();
-
-  const amplitudes = useRef([...Array(15)].map(() => new Animated.Value(1))).current;
-  const [waveData, setWaveData] = useState<number[]>(Array(15).fill(1));
-  const animationFrameId = useRef<number>();
   const [awaitingPriceInput, setAwaitingPriceInput] = useState(false);
   const [tempProductInfo, setTempProductInfo] = useState<{
   type: string;
   category: string;
 } | null>(null);
+  const [isInitializingRecording, setIsInitializingRecording] = useState(false);
+
+  const flatListRef = useRef<FlatList>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const durationTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const amplitudes = useRef([...Array(15)].map(() => new Animated.Value(1))).current;
+  const [waveData, setWaveData] = useState<number[]>(Array(15).fill(1));
+  const animationFrameId = useRef<number>();
 
   const updateWaveData = useCallback(() => {
     if (isRecording) {
@@ -256,6 +321,65 @@ const Chatbot: React.FC = () => {
 
   const sendMessageByVoice = async (transcribedText: string) => {
     if (!transcribedText.trim() || isLoading || !user) return;
+
+    if (isSavingRequest(transcribedText)) {
+      const savingInfo = extractSavingGoalInfo(transcribedText);
+      
+      if (savingInfo.goal <= 0) {
+        const askAmountMessage: Message = {
+          id: Date.now().toString(),
+          text: "Bạn muốn tiết kiệm bao nhiêu tiền cho mục tiêu này?",
+          isUser: false,
+          timestamp: new Date(),
+        };
+        setMessages([...messages, askAmountMessage]);
+        return;
+      }
+  
+      try {
+        // Lấy danh sách mục tiêu hiện tại
+        const currentGoals = await getSavingGoals(user.uid);
+        
+        // Tạo mục tiêu mới
+        const newGoal: SavingGoal = {
+          id: Date.now().toString(),
+          name: savingInfo.name,
+          goal: savingInfo.goal,
+          current: savingInfo.current,
+          createdAt: new Date().toISOString(),
+          targetDate: savingInfo.targetDate
+        };
+  
+        // Thêm mục tiêu mới vào danh sách
+        await saveSavingGoals(user.uid, [...currentGoals, newGoal]);
+  
+        // Phản hồi cho người dùng
+        const confirmMessage: Message = {
+          id: Date.now().toString(),
+          text: `Đã tạo mục tiêu tiết kiệm mới:
+  - Tên: ${savingInfo.name}
+  - Mục tiêu: ${savingInfo.goal.toLocaleString('vi-VN')} VNĐ
+  - Thời hạn: 6 tháng
+  
+  Chúc bạn sớm đạt được mục tiêu! 💪`,
+          isUser: false,
+          timestamp: new Date(),
+        };
+  
+        setMessages([...messages, confirmMessage]);
+        return;
+      } catch (error) {
+        console.error('Error creating saving goal:', error);
+        const errorMessage: Message = {
+          id: Date.now().toString(),
+          text: "Có lỗi xảy ra khi tạo mục tiêu tiết kiệm. Vui lòng thử lại.",
+          isUser: false,
+          timestamp: new Date(),
+        };
+        setMessages([...messages, errorMessage]);
+        return;
+      }
+    }
   
     // Nếu đang chờ input giá tiền
     if (awaitingPriceInput && tempProductInfo) {
@@ -466,518 +590,666 @@ const Chatbot: React.FC = () => {
       : 'expense';
   };
   
+const handlePressIn = async () => {
+  // Don't allow starting another recording if one is already in progress
+  if (isRecording || isInitializingRecording) return;
   
-  const toggleRecording = async (mode: 'tap' | 'hold') => {
-    if (isRecording) {
-      try {
-        if (recordingRef.current) {
-          await recordingRef.current.stopAndUnloadAsync();
-          await Audio.setAudioModeAsync({
-            allowsRecordingIOS: false,
-            playsInSilentModeIOS: false,
-          });
+  setIsInitializingRecording(true);
   
-          const uri = recordingRef.current.getURI();
-          if (uri) {
-            const fileInfo = await FileSystem.getInfoAsync(uri);
-            if (fileInfo.exists) {
-              const formData = new FormData();
-              const fileData: any = {
-                uri: uri,
-                name: 'audio.m4a',
-                type: 'audio/m4a',
-              };
-              formData.append('file', fileData);
-              formData.append('model', 'Whisper-Large-V3-Turbo');
-  
-              try {
-                const transcriptionResponse = await fetch(
-                  'https://api.groq.com/openai/v1/audio/transcriptions',
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${groq.apiKey}`,
-                    },
-                    body: formData,
-                  }
-                );
-  
-                if (!transcriptionResponse.ok) {
-                  throw new Error(`HTTP error! status: ${transcriptionResponse.status}`);
-                }
-  
-                const transcriptionData: TranscriptionResponse = await transcriptionResponse.json();
-                if (transcriptionData && transcriptionData.text) {
-                  await sendMessageByVoice(transcriptionData.text);
-                } else {
-                  throw new Error('No transcription text received');
-                }
-              } catch (transcriptionError) {
-                console.error('Transcription error:', transcriptionError);
-                Alert.alert('Error', 'Không thể chuyển giọng nói thành văn bản');
-              }
-              await FileSystem.deleteAsync(uri, { idempotent: true });
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Stop recording error:', err);
-        Alert.alert('Error', 'Không thể xử lý ghi âm');
-      } finally {
-        recordingRef.current = null;
-        setIsRecording(false);
-        setRecordingMode(null);
-      }
-    } else {
-      try {
-        if (recordingRef.current) {
-          await recordingRef.current.stopAndUnloadAsync();
-          recordingRef.current = null;
-        }
-  
-        const { status } = await Audio.requestPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission required', 'Vui lòng cấp quyền micro');
-          return;
-        }
-  
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-        });
-  
-        const { recording } = await Audio.Recording.createAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY
-        );
-        recordingRef.current = recording;
-        setIsRecording(true);
-        setRecordingMode(mode);
-      } catch (err) {
-        console.error('Start recording error:', err);
-        Alert.alert('Error', 'Không thể bắt đầu ghi âm');
-        setIsRecording(false);
-        setRecordingMode(null);
-      }
-    }
-  };
-
-  const handlePressIn = () => {
-    // Start recording immediately when pressing down
-    toggleRecording('hold');
-  };
-
-  const handlePressOut = async () => {
-    // Stop visualizer immediately
-    setIsRecording(false);
-    setRecordingMode(null);
-
+  try {
+    // Clean up any existing recording first
     if (recordingRef.current) {
       try {
         await recordingRef.current.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: false,
-        });
+      } catch (error) {
+        console.log("Error stopping existing recording:", error);
+      }
+      recordingRef.current = null;
+    }
 
-        const uri = recordingRef.current.getURI();
-        if (uri) {
-          const fileInfo = await FileSystem.getInfoAsync(uri);
-          if (fileInfo.exists) {
-            const formData = new FormData();
-            const fileData: any = {
-              uri: uri,
-              name: 'audio.m4a',
-              type: 'audio/m4a',
-            };
-            formData.append('file', fileData);
-            formData.append('model', 'whisper-large-v3');
+    const { status } = await Audio.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Vui lòng cấp quyền micro');
+      return;
+    }
 
-            try {
-              const transcriptionResponse = await fetch(
-                'https://api.groq.com/openai/v1/audio/transcriptions',
-                {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${groq.apiKey}`,
-                  },
-                  body: formData,
-                }
-              );
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
 
-              if (!transcriptionResponse.ok) {
-                throw new Error(`HTTP error! status: ${transcriptionResponse.status}`);
-              }
+    const { recording } = await Audio.Recording.createAsync(
+      Audio.RecordingOptionsPresets.HIGH_QUALITY
+    );
+    
+    recordingRef.current = recording;
+    setIsRecording(true);
+  } catch (error) {
+    console.log('Failed to start recording:', error);
+    
+    // Make sure we clean up properly
+    if (recordingRef.current) {
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+      } catch (cleanupError) {
+        console.log("Error cleaning up:", cleanupError);
+      }
+      recordingRef.current = null;
+    }
+  } finally {
+    setIsInitializingRecording(false);
+  }
+};
 
-              const transcriptionData: TranscriptionResponse = await transcriptionResponse.json();
-              if (transcriptionData && transcriptionData.text) {
-                await sendMessageByVoice(transcriptionData.text);
-              } else {
-                throw new Error('No transcription text received');
-              }
-            } catch (transcriptionError) {
-              console.error('Transcription error:', transcriptionError);
-              Alert.alert('Error', 'Không thể chuyển giọng nói thành văn bản');
-            }
-            await FileSystem.deleteAsync(uri, { idempotent: true });
+const handlePressOut = async () => {
+  // Don't try to stop if not recording or if we're still initializing
+  if (!isRecording || isInitializingRecording) {
+    setIsRecording(false);
+    return;
+  }
+  
+  // Update UI state immediately for responsive feedback
+  setIsRecording(false);
+  
+  try {
+    if (!recordingRef.current) {
+      return; // Nothing to stop
+    }
+
+    let uri;
+    try {
+      uri = recordingRef.current.getURI();
+      await recordingRef.current.stopAndUnloadAsync();
+    } catch (error) {
+      console.log("Error stopping recording:", error);
+      recordingRef.current = null;
+      return;
+    }
+    
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: false,
+    });
+
+    if (!uri) {
+      return;
+    }
+
+    const fileInfo = await FileSystem.getInfoAsync(uri);
+    if (fileInfo.exists) {
+      // Process audio file
+      const formData = new FormData();
+      const fileData: any = {
+        uri: uri,
+        name: 'audio.m4a',
+        type: 'audio/m4a',
+      };
+      formData.append('file', fileData);
+      formData.append('model', 'whisper-large-v3');
+
+      try {
+        const transcriptionResponse = await fetch(
+          'https://api.groq.com/openai/v1/audio/transcriptions',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${groq.apiKey}`,
+            },
+            body: formData,
           }
+        );
+
+        if (!transcriptionResponse.ok) {
+          throw new Error(`HTTP error! status: ${transcriptionResponse.status}`);
         }
-      } catch (err) {
-        console.error('Stop recording error:', err);
-        Alert.alert('Error', 'Không thể xử lý ghi âm');
+
+        const transcriptionData: TranscriptionResponse = await transcriptionResponse.json();
+        if (transcriptionData && transcriptionData.text) {
+          await sendMessageByVoice(transcriptionData.text);
+        }
+      } catch (transcriptionError) {
+        console.log('Transcription error:', transcriptionError);
       } finally {
-        recordingRef.current = null;
+        try {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        } catch (deleteError) {
+          console.log('Error deleting audio file:', deleteError);
+        }
       }
     }
-  };
+  } catch (error) {
+    console.log('Error processing recording:', error);
+  } finally {
+    recordingRef.current = null;
+  }
+};
 
-  const captureOrPickImage = async () => {
-    Alert.alert(
-      'Chọn ảnh',
-      'Bạn muốn chụp ảnh mới hay chọn ảnh có sẵn?',
-      [
-        {
-          text: 'Chụp ảnh',
-          onPress: async () => {
-            try {
-              const { status } = await ImagePicker.requestCameraPermissionsAsync();
-              if (status !== 'granted') {
-                Alert.alert('Permission required', 'Vui lòng cấp quyền truy cập camera');
-                return;
-              }
-
-              const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                quality: 1,
-                allowsEditing: false,
-              });
-
-              if (!result.canceled && result.assets && result.assets.length > 0) {
-                // Process image immediately after capture
-                processImage(result.assets[0].uri);
-              }
-            } catch (error) {
-              console.error('Camera error:', error);
-              Alert.alert('Error', 'Không thể chụp ảnh. Vui lòng thử lại.');
+const captureOrPickImage = async () => {
+  Alert.alert(
+    'Chụp hóa đơn',
+    'Bạn muốn chụp hóa đơn mới hay chọn ảnh có sẵn?',
+    [
+      {
+        text: 'Chụp ảnh',
+        onPress: async () => {
+          try {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission required', 'Vui lòng cấp quyền truy cập camera');
+              return;
             }
-          },
-        },
-        {
-          text: 'Chọn ảnh',
-          onPress: async () => {
-            try {
-              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-              if (status !== 'granted') {
-                Alert.alert('Permission required', 'Vui lòng cấp quyền truy cập thư viện ảnh');
-                return;
-              }
 
-              const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                quality: 1,
-                allowsEditing: false,
-              });
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 1,
+              allowsEditing: false,
+            });
 
-              if (!result.canceled && result.assets && result.assets.length > 0) {
-                // Process image immediately after selection
-                processImage(result.assets[0].uri);
-              }
-            } catch (error) {
-              console.error('Image picker error:', error);
-              Alert.alert('Error', 'Không thể chọn ảnh. Vui lòng thử lại.');
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              // Process image immediately after capture
+              processImage(result.assets[0].uri);
             }
-          },
+          } catch (error) {
+            console.error('Camera error:', error);
+            Alert.alert('Error', 'Không thể chụp ảnh. Vui lòng thử lại.');
+          }
         },
-        { text: 'Hủy', style: 'cancel' },
+      },
+      {
+        text: 'Chọn ảnh',
+        onPress: async () => {
+          try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+              Alert.alert('Permission required', 'Vui lòng cấp quyền truy cập thư viện ảnh');
+              return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 1,
+              allowsEditing: false,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+              // Process image immediately after selection
+              processImage(result.assets[0].uri);
+            }
+          } catch (error) {
+            console.error('Image picker error:', error);
+            Alert.alert('Error', 'Không thể chọn ảnh. Vui lòng thử lại.');
+          }
+        },
+      },
+      { text: 'Hủy', style: 'cancel' },
+    ],
+    { cancelable: true }
+  );
+};
+
+const processImage = async (imageUri: string) => {
+  if (!user) return;
+  setIsLoading(true);
+
+  // Định nghĩa types
+  type TransactionType = 'expense' | 'income';
+
+  interface ExpenseData {
+    category: string;
+    amount: string;
+    title: string;
+    type: TransactionType;
+    timestamp?: string;
+  }
+
+  interface BillItem {
+    category: string;
+    amount: string;
+    title: string;
+  }
+
+  interface BillResponse {
+    total: string;
+    items?: BillItem[];
+    comment?: string;
+    error?: string;
+    reason?: string;
+  }
+
+  try {
+    // Kiểm tra thông tin file ảnh để debug
+    const fileInfo = await FileSystem.getInfoAsync(imageUri);
+    console.log('Thông tin file ảnh:', fileInfo);
+
+    // Chuyển ảnh sang base64
+    const base64Image = await FileSystem.readAsStringAsync(imageUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Thêm thông báo cho người dùng
+    const processingMessage: Message = {
+      id: Date.now().toString(),
+      text: "Đang xử lý hóa đơn, vui lòng đợi...",
+      isUser: false,
+      timestamp: new Date(),
+    };
+    
+    const messagesWithProcessing = [...messages, processingMessage];
+    setMessages(messagesWithProcessing);
+
+    // Sử dụng model GPT-4-Vision
+    const billAnalysis = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Phân tích ảnh này. Nếu đây là hóa đơn hoặc biên lai, hãy trả về thông tin dưới dạng JSON theo format sau:
+             
+{
+  "total": "tổng tiền (chỉ số, không có đơn vị)",
+  "items": [
+    {"category": "Ăn uống/Mua sắm/Di chuyển/Giáo dục/Giải trí/Y tế/Hóa đơn/Khác", "amount": "số tiền (chỉ số, không có đơn vị)", "title": "tên món hàng/dịch vụ"},
+    {"category": "Ăn uống/Mua sắm/Di chuyển/Giáo dục/Giải trí/Y tế/Hóa đơn/Khác", "amount": "số tiền (chỉ số, không có đơn vị)", "title": "tên món hàng/dịch vụ"}
+  ],
+  "comment": "nhận xét ngắn gọn về các khoản chi"
+}
+
+Nếu đây là hóa đơn nhưng bạn chỉ thấy tổng tiền mà không thấy chi tiết các món, hãy trả về:
+{
+  "total": "tổng tiền (chỉ số, không có đơn vị)",
+  "items": [
+    {"category": "Ăn uống", "amount": "tổng tiền", "title": "Hóa đơn không chi tiết"}
+  ],
+  "comment": "Không thể xác định chi tiết các món"
+}
+
+Nếu không phải là hóa đơn hoặc biên lai, hãy phản hồi: {"error": "NOT_BILL", "reason": "lý do cụ thể"}
+
+Lưu ý: Đảm bảo tổng tiền và số tiền từng món chỉ chứa các chữ số, không có dấu phẩy, dấu chấm hay đơn vị tiền tệ.`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`,
+              }
+            }
+          ]
+        }
       ],
-      { cancelable: true }
-    );
-  };
-
-  const processImage = async (imageUri: string) => {
-    if (!user) return;
-    setIsLoading(true);
+      model: "llama-3.2-90b-vision-preview", // Sử dụng model vision tốt hơn
+      temperature: 0.1, // Giảm temperature để kết quả nhất quán hơn
+      max_tokens: 1500,
+    });
   
-    // Định nghĩa types
-    type TransactionType = 'expense' | 'income';
+    console.log('Phản hồi gốc:', billAnalysis.choices[0]?.message?.content);
   
-    interface ExpenseData {
-      category: string;
-      amount: string;
-      title: string;
-      type: TransactionType;
-      timestamp?: string;
+    const response = billAnalysis.choices[0]?.message?.content;
+    if (!response) {
+      throw new Error('Không nhận được phản hồi từ AI');
     }
-  
+    
+    // Loại bỏ tin nhắn "đang xử lý"
+    setMessages(messages);
+    
+    // Tìm và trích xuất phần JSON từ phản hồi
+    let jsonContent = response;
+    const jsonMatch = response.match(/(\{[\s\S]*\})/);
+    if (jsonMatch) {
+      jsonContent = jsonMatch[1];
+    }
+    
     try {
-      const base64Image = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-  
-      // Đầu tiên phân tích xem đây là bill hay sản phẩm đơn lẻ
-      const initialAnalysis = await groq.chat.completions.create({
-        messages: [
-          {
-            role: "user",
-            content: [
+      // Thử phân tích JSON
+      const parsedResponse: BillResponse = JSON.parse(jsonContent);
+      
+      if (parsedResponse.error === "NOT_BILL") {
+        // Kiểm tra xem phản hồi có chứa thông tin về tổng tiền không
+        const amountMatch = response.match(/(\d[\d.,\s]+)(?:\s*)(đồng|vnd|vnđ|₫)/i);
+        const estimatedAmount = amountMatch ? amountMatch[1].replace(/[^\d]/g, '') : '';
+        
+        if (estimatedAmount && parseInt(estimatedAmount) > 0) {
+          // Nếu tìm thấy tổng tiền, tạo một giao dịch đơn giản
+          const reason = parsedResponse.reason || "Không nhận diện được chi tiết hóa đơn";
+          
+          // Hiển thị thông báo và tùy chọn lưu đơn giản
+          Alert.alert(
+            'Không nhận diện đầy đủ chi tiết hóa đơn',
+            `${reason}\n\nTuy nhiên, hệ thống phát hiện tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ\n\nBạn có muốn lưu khoản chi này không?`,
+            [
               {
-                type: "text",
-                text: "Phân tích đây là hóa đơn (bill) hay một sản phẩm đơn lẻ? Nó là sản phẩm đơn lẻ khi nó chỉ có một món đồ nào đó không có số tiền thanh toán hay gì cả. Trả lời ngắn gọn: BILL hoặc PRODUCT"
+                text: 'Hủy',
+                style: 'cancel'
               },
               {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`,
+                text: 'Lưu',
+                onPress: async () => {
+                  // Tạo một giao dịch đơn giản
+                  const simpleExpense: ExpenseData = {
+                    category: 'Ăn uống', // Giả định đây là hóa đơn ăn uống dựa trên thông tin từ AI
+                    amount: estimatedAmount,
+                    title: 'Hóa đơn ăn uống',
+                    type: 'expense',
+                    timestamp: new Date().toISOString()
+                  };
+                  
+                  await saveExpenseToCSV(user.uid, simpleExpense);
+                  refreshTransactions();
+                  
+                  const simpleBillSummary = `🧾 Đã lưu hóa đơn đơn giản:
+
+💰 Tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ
+📋 Tiêu đề: Hóa đơn ăn uống
+📁 Phân loại: Ăn uống
+
+⚠️ Hệ thống không thể xác định đầy đủ chi tiết từ hóa đơn này.`;
+                  
+                  const simpleResponse: Message = {
+                    id: Date.now().toString(),
+                    text: simpleBillSummary,
+                    isUser: false,
+                    timestamp: new Date(),
+                  };
+                  
+                  const updatedMessages = [...messages, simpleResponse];
+                  setMessages(updatedMessages);
+                  await updateChatHistory(user.uid, updatedMessages);
                 }
               }
             ]
-          }
-        ],
-        model: "llama-3.2-90b-vision-preview",
-        temperature: 0.2,
-        max_tokens: 1024,
-      });
-  
-      const imageType = initialAnalysis.choices[0]?.message?.content?.trim().toUpperCase();
-  
-      if (imageType === 'BILL') {
-        const billAnalysis = await groq.chat.completions.create({
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: `Phân tích hóa đơn này và trả về CHÍNH XÁC theo format sau (không thêm bớt ký tự):
-      
-      TOTAL:[tổng tiền];
-      ITEMS:
-      **Phân loại:[loại hàng],Tiền:[số tiền] VNĐ,Tiêu đề:[tên món]**
-      **Phân loại:[loại hàng],Tiền:[số tiền] VNĐ,Tiêu đề:[tên món]**
-      (mỗi món một dòng);
-      COMMENT:[nhận xét về các khoản chi]
-      
-      Ví dụ:
-      TOTAL:125000;
-      ITEMS:
-      **Phân loại:Ăn uống,Tiền:75000 VNĐ,Tiêu đề:Cơm gà**
-      **Phân loại:Ăn uống,Tiền:50000 VNĐ,Tiêu đề:Trà sữa**;
-      COMMENT:Các món ăn có giá hợp lý, phù hợp với mặt bằng chung.`
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:image/jpeg;base64,${base64Image}`,
-                  }
+          );
+          
+          const infoResponse: Message = {
+            id: Date.now().toString(),
+            text: `ℹ️ Phát hiện hóa đơn có tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ
+
+Tuy nhiên, không thể nhận diện đầy đủ chi tiết. ${parsedResponse.reason}
+
+Vui lòng chọn lưu hoặc hủy khoản chi này.`,
+            isUser: false,
+            timestamp: new Date(),
+          };
+          
+          const updatedMessages = [...messages, infoResponse];
+          setMessages(updatedMessages);
+          await updateChatHistory(user.uid, updatedMessages);
+          return;
+        } else {
+          // Xử lý trường hợp không phải hóa đơn
+          const reason = parsedResponse.reason || "Không nhận diện được định dạng hóa đơn";
+          
+          // Hiển thị thông báo và tùy chọn nhập thủ công
+          Alert.alert(
+            'Không nhận diện được hóa đơn',
+            `${reason}\n\nBạn có muốn nhập thông tin chi tiêu thủ công không?`,
+            [
+              {
+                text: 'Hủy',
+                style: 'cancel'
+              },
+              {
+                text: 'Nhập thủ công',
+                onPress: () => {
+                  // Thêm tin nhắn gợi ý cách nhập thủ công
+                  const helpMessage: Message = {
+                    id: Date.now().toString(),
+                    text: "Bạn có thể nhập thông tin chi tiêu bằng cách nói hoặc nhắn tin theo cú pháp: \"Tôi đã chi [số tiền] cho [mục đích]\"",
+                    isUser: false,
+                    timestamp: new Date(),
+                  };
+                  
+                  setMessages([...messages, helpMessage]);
+                  updateChatHistory(user.uid, [...messages, helpMessage]);
                 }
-              ]
-            }
-          ],
-          model: "llama-3.2-90b-vision-preview",
-          temperature: 0.2, // Giảm temperature để response chính xác hơn
-          max_tokens: 1024,
-        });
-      
-        console.log('Raw response:', billAnalysis.choices[0]?.message?.content);
-      
-        const response = billAnalysis.choices[0]?.message?.content;
-        if (response) {
-          try {
-            // Tách response theo dấu chấm phẩy và loại bỏ khoảng trắng thừa
-            const sections = response.split(';').map(section => section.trim());
-            console.log('Sections:', sections);
-      
-            // Kiểm tra format tổng quát
-            if (sections.length < 3) {
-              throw new Error('Thiếu thông tin trong response');
-            }
-      
-            // Xử lý tổng tiền
-            const totalMatch = sections[0].match(/TOTAL:(\d+)/);
-            if (!totalMatch) {
-              throw new Error('Không tìm thấy tổng tiền');
-            }
-            const totalAmount = totalMatch[1];
-      
-            // Xử lý danh sách items
-            const itemsSection = sections[1];
-            if (!itemsSection.startsWith('ITEMS:')) {
-              throw new Error('Không tìm thấy danh sách món hàng');
-            }
-      
-            // Tách và xử lý từng item
-            const itemMatches = itemsSection.match(/\*\*Phân loại:.*?\*\*/g);
-            if (!itemMatches) {
-              throw new Error('Không tìm thấy món hàng nào');
-            }
-      
-            const savedItems = [];
-            for (const itemString of itemMatches) {
-              const itemMatch = itemString.match(/\*\*Phân loại:\s*([^,]+),\s*Tiền:\s*([\d,.\s]+)\s*VNĐ,\s*Tiêu đề:\s*([^\*]+)\*\*/);
-              if (itemMatch) {
-                const [_, category, amount, title] = itemMatch;
-                
-                const expenseData: ExpenseData = {
-                  category: category.trim(),
-                  amount: amount.replace(/[,.\s]/g, ''),
-                  title: title.trim(),
-                  type: 'expense' as TransactionType,
-                  timestamp: new Date().toISOString()
-                };
-      
-                console.log('Saving item:', expenseData);
-                
-                await saveExpenseToCSV(user.uid, expenseData);
-                savedItems.push(`🛍️ ${title.trim()}: ${amount.trim()} VNĐ (${category.trim()})`);
               }
-            }
-      
-            // Xử lý comment
-            const commentMatch = sections[2].match(/COMMENT:(.*)/);
-            if (!commentMatch) {
-              throw new Error('Không tìm thấy nhận xét');
-            }
-            const comment = commentMatch[1].trim();
-      
-            if (savedItems.length > 0) {
-              refreshTransactions();
-      
-              const billSummary = `🧾 Đã xử lý bill:
-      
-      💰 Tổng tiền: ${totalAmount} VNĐ
-      
-      📝 Chi tiết các món:
-      ${savedItems.join('\n')}
-      
-      💭 Nhận xét: ${comment}`;
-      
-              const botResponse: Message = {
-                id: Date.now().toString(),
-                text: billSummary,
-                isUser: false,
-                timestamp: new Date(),
-              };
-      
-              const updatedMessages = [...messages, botResponse];
-              setMessages(updatedMessages);
-              await updateChatHistory(user.uid, updatedMessages);
-            }
-      
-          } catch (error) {
-            console.error('Error processing bill items:', error);
-            const errorResponse: Message = {
-              id: Date.now().toString(),
-              text: `❌ Lỗi xử lý bill: ${error instanceof Error ? error.message : 'Lỗi không xác định'}
-              
-      🔍 Vui lòng chụp lại bill rõ ràng hơn hoặc thử lại.`,
-              isUser: false,
-              timestamp: new Date(),
-            };
-      
-            const updatedMessages = [...messages, errorResponse];
-            setMessages(updatedMessages);
-            await updateChatHistory(user.uid, updatedMessages);
-          }
+            ]
+          );
+          
+          const errorResponse: Message = {
+            id: Date.now().toString(),
+            text: `Ảnh này không được nhận diện là hóa đơn.\n\nLý do: ${reason}\n\nVui lòng thử lại với ảnh khác hoặc chụp lại hóa đơn rõ nét hơn.`,
+            isUser: false,
+            timestamp: new Date(),
+          };
+          
+          const updatedMessages = [...messages, errorResponse];
+          setMessages(updatedMessages);
+          await updateChatHistory(user.uid, updatedMessages);
+          return;
         }
-      } else {
-        // Xử lý sản phẩm đơn lẻ
-        const productAnalysis = await groq.chat.completions.create({
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Mô tả sản phẩm này là gì (sách/giày/quần áo/...)? Format: PRODUCT:[loại sản phẩm];CATEGORY:[phân loại chi tiêu phù hợp]"
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:image/jpeg;base64,${base64Image}`,
-                  }
-                }
-              ]
-            }
-          ],
-          model: "llama-3.2-90b-vision-preview",
-          temperature: 0.5,
-          max_tokens: 256,
+      }
+      
+      // Xử lý dữ liệu JSON khi nhận diện thành công
+      let totalAmount = parsedResponse.total;
+      // Đảm bảo tổng tiền chỉ chứa số
+      totalAmount = totalAmount.toString().replace(/[^\d]/g, '');
+      
+      if (!totalAmount || totalAmount === '0') {
+        throw new Error('Không thể xác định tổng tiền từ hóa đơn');
+      }
+      
+      const items = parsedResponse.items || [];
+      const commentSection = parsedResponse.comment || 'Không có nhận xét';
+      
+      // Chuẩn hóa dữ liệu các mục
+      const normalizedItems: BillItem[] = items.map((item: BillItem) => ({
+        category: item.category || 'Khác',
+        amount: item.amount.toString().replace(/[^\d]/g, '') || '0',
+        title: item.title || 'Không có tiêu đề'
+      }));
+      
+      // Loại bỏ các mục trùng lặp
+      const uniqueItems: BillItem[] = [];
+      const processedItems = new Set<string>();
+      
+      for (const item of normalizedItems) {
+        // Bỏ qua các mục có số tiền là 0
+        if (item.amount === '0') continue;
+        
+        const itemKey = `${item.category}|${item.amount}|${item.title}`;
+        if (!processedItems.has(itemKey)) {
+          processedItems.add(itemKey);
+          uniqueItems.push(item);
+        }
+      }
+      
+      console.log(`Tìm thấy ${uniqueItems.length} mục hợp lệ trong hóa đơn`);
+      
+      // Nếu không có mục nào được tìm thấy, tạo một mục mặc định
+      if (uniqueItems.length === 0) {
+        uniqueItems.push({
+          category: 'Khác',
+          amount: totalAmount,
+          title: 'Chi tiêu tổng hợp'
         });
-  
-        console.log('Product analysis response:', productAnalysis.choices[0]?.message?.content);
-  
-        const productInfo = productAnalysis.choices[0]?.message?.content;
-        if (productInfo) {
-          try {
-            const [product, category] = productInfo.split(';');
-            const productType = product.split(':')[1]?.trim();
-            const expenseCategory = category.split(':')[1]?.trim();
-  
-            console.log('Product info:', { productType, expenseCategory });
-  
-            if (!productType || !expenseCategory) {
-              throw new Error('Không thể nhận dạng thông tin sản phẩm');
-            }
-  
-            // Hiển thị prompt để hỏi giá
-            const botQuestion: Message = {
-              id: Date.now().toString(),
-              text: `Tôi thấy đây là ${productType}. Bạn đã mua với giá bao nhiêu? (Vui lòng nói giá tiền)`,
-              isUser: false,
-              timestamp: new Date(),
-            };
-  
-            const updatedMessages = [...messages, botQuestion];
-            setMessages(updatedMessages);
-            await updateChatHistory(user.uid, updatedMessages);
-  
-            // Kích hoạt chế độ lắng nghe giá tiền
-            setAwaitingPriceInput(true);
-            setTempProductInfo({
-              type: productType,
-              category: expenseCategory
-            });
-  
-            console.log('Awaiting price input for:', tempProductInfo);
-  
-          } catch (error) {
-            console.error('Error processing product:', error);
-            const errorResponse: Message = {
-              id: Date.now().toString(),
-              text: `Lỗi xử lý sản phẩm: ${error instanceof Error ? error.message : 'Lỗi không xác định'}`,
-              isUser: false,
-              timestamp: new Date(),
-            };
-  
-            const updatedMessages = [...messages, errorResponse];
-            setMessages(updatedMessages);
-            await updateChatHistory(user.uid, updatedMessages);
-          }
+      }
+      
+      // Xác định danh mục chung cho hóa đơn
+      const categoryCounts: {[key: string]: number} = {};
+      uniqueItems.forEach(item => {
+        categoryCounts[item.category] = (categoryCounts[item.category] || 0) + 1;
+      });
+      
+      // Lấy danh mục xuất hiện nhiều nhất
+      let mainCategory = uniqueItems[0].category;
+      let maxCount = 0;
+      Object.entries(categoryCounts).forEach(([category, count]) => {
+        if (count > maxCount) {
+          maxCount = count;
+          mainCategory = category;
         }
-      }
-  
-    } catch (error) {
-      console.error('Image processing error:', error);
-      let errorMessage = "Xin lỗi, đã có lỗi xảy ra khi xử lý ảnh.";
-      if (error instanceof Error) {
-        errorMessage += ` Chi tiết: ${error.message}`;
+      });
+      
+      // Tạo tiêu đề cho hóa đơn
+      let billTitle = '';
+      if (uniqueItems.length === 1) {
+        billTitle = uniqueItems[0].title;
+      } else if (uniqueItems.length <= 3) {
+        billTitle = uniqueItems.map(item => item.title).join(', ');
       } else {
-        errorMessage += " Có lỗi không xác định xảy ra.";
+        // Nếu có nhiều hơn 3 món, lấy 2 món đầu tiên và ghi "và x món khác"
+        billTitle = `${uniqueItems[0].title}, ${uniqueItems[1].title} và ${uniqueItems.length - 2} món khác`;
       }
-  
-      const errorResponse: Message = {
+      
+      // Thêm tiền tố "Hóa đơn" vào tiêu đề
+      billTitle = `Hóa đơn - ${billTitle}`;
+      
+      // Lưu giao dịch vào CSV
+      const expenseData: ExpenseData = {
+        category: mainCategory,
+        amount: totalAmount,
+        title: billTitle,
+        type: 'expense',
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('Lưu hóa đơn:', expenseData);
+      
+      await saveExpenseToCSV(user.uid, expenseData);
+      refreshTransactions();
+      
+      // Hiển thị chi tiết các món cho người dùng
+      const itemDetails = uniqueItems.map(item => 
+        `🛍️ ${item.title}: ${parseInt(item.amount).toLocaleString('vi-VN')} VNĐ (${item.category})`
+      );
+      
+      const billSummary = `🧾 Đã lưu hóa đơn:
+
+💰 Tổng tiền: ${parseInt(totalAmount).toLocaleString('vi-VN')} VNĐ
+📋 Tiêu đề: ${billTitle}
+📁 Phân loại: ${mainCategory}
+
+📝 Chi tiết ${uniqueItems.length} món:
+${itemDetails.join('\n')}
+
+💭 Nhận xét: ${commentSection}`;
+      
+      const botResponse: Message = {
         id: Date.now().toString(),
-        text: errorMessage,
+        text: billSummary,
         isUser: false,
         timestamp: new Date(),
       };
-  
-      const updatedMessages = [...messages, errorResponse];
+      
+      const updatedMessages = [...messages, botResponse];
       setMessages(updatedMessages);
       await updateChatHistory(user.uid, updatedMessages);
-    } finally {
-      setIsLoading(false);
+      
+    } catch (jsonError) {
+      console.error('Lỗi xử lý JSON:', jsonError);
+      
+      // Thử phương pháp đơn giản hơn - tìm số tiền trực tiếp từ phản hồi
+      try {
+        // Tìm số tiền từ phản hồi
+        const amountMatch = response.match(/(\d[\d\s,.]+)\s*(đồng|vnd|vnđ|₫)/i);
+        const estimatedAmount = amountMatch ? amountMatch[1].replace(/[^\d]/g, '') : '';
+        
+        if (estimatedAmount && parseInt(estimatedAmount) > 0) {
+          // Hiển thị thông báo và tùy chọn lưu đơn giản
+          Alert.alert(
+            'Phát hiện hóa đơn',
+            `Hệ thống phát hiện hóa đơn với tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ\n\nBạn có muốn lưu khoản chi này không?`,
+            [
+              {
+                text: 'Hủy',
+                style: 'cancel'
+              },
+              {
+                text: 'Lưu',
+                onPress: async () => {
+                  // Tạo một giao dịch đơn giản
+                  const simpleExpense: ExpenseData = {
+                    category: 'Ăn uống', // Giả định đây là hóa đơn ăn uống
+                    amount: estimatedAmount,
+                    title: 'Hóa đơn ăn uống',
+                    type: 'expense',
+                    timestamp: new Date().toISOString()
+                  };
+                  
+                  await saveExpenseToCSV(user.uid, simpleExpense);
+                  refreshTransactions();
+                  
+                  const simpleBillSummary = `🧾 Đã lưu hóa đơn đơn giản:
+
+💰 Tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ
+📋 Tiêu đề: Hóa đơn ăn uống
+📁 Phân loại: Ăn uống
+
+⚠️ Hệ thống không thể xác định đầy đủ chi tiết từ hóa đơn này.`;
+                  
+                  const simpleResponse: Message = {   
+                    id: Date.now().toString(),
+                    text: simpleBillSummary,
+                    isUser: false,
+                    timestamp: new Date(),
+                  };
+                  
+                  const updatedMessages = [...messages, simpleResponse];
+                  setMessages(updatedMessages);
+                  await updateChatHistory(user.uid, updatedMessages);
+                }
+              }
+            ]
+          );
+          
+          const infoResponse: Message = {
+            id: Date.now().toString(),
+            text: `ℹ️ Phát hiện hóa đơn có tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ
+
+Tuy nhiên, không thể nhận diện đầy đủ chi tiết. Vui lòng chọn lưu hoặc hủy khoản chi này.`,
+            isUser: false,
+            timestamp: new Date(),
+          };
+          
+          const updatedMessages = [...messages, infoResponse];
+          setMessages(updatedMessages);
+          await updateChatHistory(user.uid, updatedMessages);
+          return;
+        }
+        
+        // Nếu không tìm thấy số tiền, hiển thị lỗi
+        throw new Error('Không thể xác định thông tin từ hóa đơn');
+      } catch (fallbackError) {
+        // Hiển thị lỗi cuối cùng
+        const errorResponse: Message = {
+          id: Date.now().toString(),
+          text: `❌ Lỗi xử lý hóa đơn: ${fallbackError instanceof Error ? fallbackError.message : 'Lỗi không xác định'}
+          
+🔍 Vui lòng thử lại với một trong các cách sau:
+1. Chụp lại hóa đơn rõ ràng hơn
+2. Đảm bảo hóa đơn nằm hoàn toàn trong khung hình
+3. Chụp trong điều kiện ánh sáng tốt
+4. Nhập thông tin chi tiêu thủ công bằng cách nói "Tôi đã chi [số tiền] cho [mục đích]"`,
+          isUser: false,
+          timestamp: new Date(),
+        };
+        
+        const updatedMessages = [...messages, errorResponse];
+        setMessages(updatedMessages);
+        await updateChatHistory(user.uid, updatedMessages);
+      }
     }
-  };
+
+  } catch (error) {
+    console.error('Lỗi xử lý ảnh:', error);
+    
+    const errorResponse: Message = {
+      id: Date.now().toString(),
+      text: `❌ Không thể xử lý ảnh: ${error instanceof Error ? error.message : 'Lỗi không xác định'}
+      
+Vui lòng thử lại sau hoặc nhập thông tin chi tiêu thủ công bằng cách nói "Tôi đã chi [số tiền] cho [mục đích]"`,
+      isUser: false,
+      timestamp: new Date(),
+    };
+
+    const updatedMessages = [...messages, errorResponse];
+    setMessages(updatedMessages);
+    await updateChatHistory(user.uid, updatedMessages);
+  } finally {
+    setIsLoading(false);
+  }
+};
       
       const renderVisualizer = () => {
     if (!isRecording) return null;
@@ -1083,20 +1355,23 @@ const Chatbot: React.FC = () => {
                 <EvilIcons name="camera" size={24} color="#fff" />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-                style={[
-                  styles.micButton,
-                  isRecording && styles.micButtonRecording
-                ]}
-              >
-                <Ionicons
-                  name={isRecording ? "mic" : "mic-outline"}
-                  size={32}
-                  color="#fff"
-                />
-              </TouchableOpacity>
+              <View style={styles.micButtonContainer}>
+                <TouchableOpacity
+                  onPressIn={handlePressIn}
+                  onPressOut={handlePressOut}
+                  style={[
+                    styles.micButton,
+                    isRecording && styles.micButtonHoldRecording
+                  ]}
+                >
+                  <Ionicons
+                    name={isRecording ? "mic" : "mic-outline"}
+                    size={32}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+                <Text style={styles.holdToRecordText}>Giữ để ghi âm</Text>
+              </View>
 
               <TouchableOpacity style={styles.iconButton}>
                 <EvilIcons name="close" size={24} color="#fff" />
@@ -1194,8 +1469,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center'
   },
-  micButtonRecording: {
-    backgroundColor: '#ff4757',
+  micButtonHoldRecording: {
+    backgroundColor: '#ff4757', // Red for hold mode
   },
   visualizerWrapper: {
     flexDirection: 'row',
@@ -1249,11 +1524,13 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 8,
   },
-  tapModeText: {
-    color: '#fff',
+  micButtonContainer: {
+    alignItems: 'center',
+  },
+  holdToRecordText: {
+    color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
     marginTop: 4,
-    textAlign: 'center',
   },
 });
 

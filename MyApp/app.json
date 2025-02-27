@@ -27,12 +27,6 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_MEDIA_LOCATION",
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_MEDIA_LOCATION"
       ]
     },
@@ -81,6 +75,7 @@
     },
     "updates": {
       "url": "https://u.expo.dev/5bef3b3e-b000-4347-b32e-f90b9ce84bcb"
-    }
+    },
+    "owner": "nckh"
   }
 }

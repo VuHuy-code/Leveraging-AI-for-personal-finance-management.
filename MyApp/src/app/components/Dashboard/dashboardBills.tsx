@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getDailyExpenses } from '../../../services/firebase/storage';
+import { useTransactionContext } from '../../contexts/TransactionContext';
+
+
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -176,18 +179,24 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
 
   
 
-  const fetchTransactions = async (date: Date) => {
-    try {
-      const expenses = await getDailyExpenses(userData.uid, date);
-      setTransactions(expenses);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-    }
-  };
+  // Modify the fetchTransactions function
+const fetchTransactions = async (date: Date) => {
+  try {
+    const expenses = await getDailyExpenses(userData.uid, date);
+    // Sort transactions by timestamp in descending order (newest first)
+    const sortedExpenses = expenses.sort((a, b) => {
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    });
+    setTransactions(sortedExpenses);
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+  }
+};
 
-  const filteredTransactions = selectedCategory === 'All' 
-    ? transactions 
-    : transactions.filter(t => t.category === selectedCategory);
+// Update the filteredTransactions const to maintain the sorting
+const filteredTransactions = selectedCategory === 'All' 
+  ? transactions 
+  : transactions.filter(t => t.category === selectedCategory);
 
   const getDaysInMonth = (month: number, year: number) => {
     return new Date(year, month + 1, 0).getDate();
@@ -322,6 +331,20 @@ const handleDateSelect = (day: number) => {
       </View>
     </Modal>
   );
+
+  const { refreshKey, refreshTransactions } = useTransactionContext(); // Add this
+
+  // Modify the useEffect that fetches transactions to include refreshKey
+  useEffect(() => {
+    fetchTransactions(selectedDate);
+  }, [selectedDate, refreshKey]); // Add refreshKey as dependency
+
+  // Add a new useEffect to refresh transactions when refreshKey changes
+  useEffect(() => {
+    if (refreshKey) {
+      fetchTransactions(selectedDate);
+    }
+  }, [refreshKey, selectedDate]);
 
   return (
     <ScrollView style={styles.container}>

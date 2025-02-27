@@ -9,6 +9,12 @@ interface Expense {
   title: string;
 }
 
+interface ExtendedExpense extends Expense {
+  iconName?: string;
+  iconFamily?: string;
+  iconColor?: string;
+}
+
 interface TransactionCache {
   transactions: Expense[];
   timestamp: number;
@@ -517,6 +523,7 @@ export interface Wallet {
   currentBalance: number;
   createdAt: string;
   lastResetDate: string;
+  lastProcessedTime?: number; // New field to track processed transactions
   isActive: boolean;
 }
 
@@ -705,4 +712,118 @@ export const getAllExpenses = async (userId: string): Promise<Expense[]> => {
     console.error('Error getting all expenses:', error);
     return [];
   }
+};
+
+export const updateWalletBalance = async (userId: string, walletId: string, newCurrentBalance: number): Promise<void> => {
+  if (!userId) throw new Error('User ID is required');
+  
+  try {
+    const wallets = await getWallets(userId);
+    const updatedWallets = wallets.map(wallet => 
+      wallet.id === walletId 
+        ? { ...wallet, currentBalance: newCurrentBalance }
+        : wallet
+    );
+    
+    await saveWallets(userId, updatedWallets);
+  } catch (error) {
+    console.error('Error updating wallet balance:', error);
+    throw error;
+  }
+};
+
+// Add these interfaces
+export interface SavingGoal {
+  id: string;
+  name: string;
+  goal: number;
+  current: number;
+  createdAt: string;
+  targetDate: string;
+  description?: string;
+}
+
+// Add these functions for savings management
+export const saveSavingGoals = async (userId: string, goals: SavingGoal[]): Promise<void> => {
+  if (!userId) throw new Error('User ID is required');
+  
+  const storage = getStorage();
+  const savingsPath = `savings/${userId}/goals.json`;
+  const fileRef = ref(storage, savingsPath);
+
+  try {
+    const blob = new Blob([JSON.stringify(goals)], { type: 'application/json' });
+    await uploadBytes(fileRef, blob);
+  } catch (error) {
+    console.error('Error saving saving goals:', error);
+    throw error;
+  }
+};
+
+export const getSavingGoals = async (userId: string): Promise<SavingGoal[]> => {
+  if (!userId) throw new Error('User ID is required');
+
+  const storage = getStorage();
+  const savingsPath = `savings/${userId}/goals.json`;
+  const fileRef = ref(storage, savingsPath);
+
+  try {
+    const url = await getDownloadURL(fileRef);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('Failed to fetch savings data');
+    }
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  } catch (error: any) {
+    if (error.code === 'storage/object-not-found') {
+      return [];
+    }
+    console.error('Error getting saving goals:', error);
+    throw error;
+  }
+};
+
+// Add function to update a specific saving goal
+export const updateSavingGoal = async (
+  userId: string, 
+  goalId: string, 
+  updates: Partial<SavingGoal>
+): Promise<void> => {
+  const goals = await getSavingGoals(userId);
+  const updatedGoals = goals.map(goal => 
+    goal.id === goalId ? { ...goal, ...updates } : goal
+  );
+  await saveSavingGoals(userId, updatedGoals);
+};
+
+// Thêm vào file storage.tsx
+export const addToSavingGoal = async (userId: string, goalNameOrId: string, amount: number): Promise<{
+  success: boolean;
+  goal?: SavingGoal;
+  message?: string;
+}> => {
+  // Lấy danh sách mục tiêu
+  const goals = await getSavingGoals(userId);
+  
+  // Tìm mục tiêu phù hợp (theo ID hoặc tên tương tự)
+  const goal = goals.find(g => 
+    g.id === goalNameOrId || 
+    g.name.toLowerCase().includes(goalNameOrId.toLowerCase())
+  );
+  
+  if (!goal) {
+    return { success: false, message: `Không tìm thấy mục tiêu tiết kiệm "${goalNameOrId}"` };
+  }
+  
+  // Cập nhật số tiền
+  const updatedGoal = {
+    ...goal,
+    current: goal.current + amount
+  };
+  
+  // Cập nhật mục tiêu cụ thể
+  await updateSavingGoal(userId, goal.id, { current: updatedGoal.current });
+  
+  return { success: true, goal: updatedGoal };
 };
