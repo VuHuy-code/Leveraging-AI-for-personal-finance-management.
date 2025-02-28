@@ -11,8 +11,15 @@ import {
   Dimensions 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getDailyExpenses, getMonthlyExpenses } from '../../../services/firebase/storage';
+import { getDailyExpenses, getMonthlyExpenses, getCategoryTotals, getWallet } from '../../../services/firebase/storage';
 import { useTransactionContext } from '../../contexts/TransactionContext';
+import Svg, { Circle, G } from 'react-native-svg';
+
+interface CategoryTotal {
+  category: string;
+  totalExpense: number;
+  totalIncome: number;
+}
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -91,6 +98,61 @@ const calculateWeekDays = (date: Date) => {
   return week;
 };
 
+interface PieChartProps {
+  data: { category: string; amount: number; color: string }[];
+  totalBalance: number;
+}
+
+const PieChart: React.FC<PieChartProps> = ({ data, totalBalance }) => {
+  const radius = 100;
+  const center = radius + 10;
+  const circumference = 2 * Math.PI * radius;
+
+  let startAngle = 0;
+
+  return (
+    <View style={styles.chartContainer}>
+      <Svg width={center * 2} height={center * 2}>
+        <G transform={`translate(${center}, ${center})`}>
+          {data.map((item, index) => {
+            const ratio = item.amount / totalBalance;
+            const strokeDasharray = `${circumference * ratio} ${circumference}`;
+            const rotation = startAngle * (180 / Math.PI);
+
+            startAngle += 2 * Math.PI * ratio;
+
+            return (
+              <Circle
+                key={index}
+                r={radius}
+                stroke={item.color}
+                strokeWidth={20}
+                strokeDasharray={strokeDasharray}
+                rotation={rotation}
+                originX={0}
+                originY={0}
+                fill="transparent"
+              />
+            );
+          })}
+        </G>
+      </Svg>
+
+      {/* Hiển thị tỉ lệ từng mục */}
+      <View style={styles.legendContainer}>
+        {data.map((item, index) => (
+          <View key={index} style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: item.color }]} />
+            <Text style={styles.legendText}>
+              {item.category}: {((item.amount / totalBalance) * 100).toFixed(2)}%
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
 const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showFullCalendar, setShowFullCalendar] = useState(false);
@@ -100,10 +162,47 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [weekDays, setWeekDays] = useState(calculateWeekDays(new Date()));
-  const [activeTab, setActiveTab] = useState<'daily' | 'monthly'>('daily'); // State để quản lý tab hiện tại
-  const [monthlyTransactions, setMonthlyTransactions] = useState<any[]>([]); // State cho thống kê tháng
+  const [activeTab, setActiveTab] = useState<'daily' | 'monthly'>('daily');
+  const [monthlyTransactions, setMonthlyTransactions] = useState<any[]>([]);
+  const [categoryTotals, setCategoryTotals] = useState<CategoryTotal[]>([]);
+  const [totalBalance, setTotalBalance] = useState<number>(0);
 
   const scrollViewRef = React.useRef<ScrollView>(null);
+
+  const getCategoryColor = (category: string) => {
+    switch (category.toLowerCase()) {
+      case 'ăn uống':
+        return '#FF6384'; // Màu đỏ
+      case 'di chuyển':
+        return '#36A2EB'; // Màu xanh dương
+      case 'mua sắm':
+        return '#FFCE56'; // Màu vàng
+      case 'hóa đơn':
+        return '#4BC0C0'; // Màu xanh lá cây
+      case 'giải trí':
+        return '#9966FF'; // Màu tím
+      default:
+        return '#CCCCCC'; // Màu mặc định
+    }
+  };
+
+  const fetchCategoryTotals = async () => {
+    try {
+      const totals = await getCategoryTotals(userData.uid);
+      const wallet = await getWallet(userData.uid);
+
+      setCategoryTotals(totals);
+      setTotalBalance(wallet ? wallet.balance : 0);
+    } catch (error) {
+      console.error('Error fetching category totals:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'monthly') {
+      fetchCategoryTotals();
+    }
+  }, [activeTab]);
 
   const scrollToSelectedDay = () => {
     if (scrollViewRef.current) {
@@ -173,96 +272,31 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
     if (activeTab === 'daily') {
       return (
         <View style={styles.transactionsSection}>
-          <View style={styles.transactionsHeader}>
-            <Text style={styles.sectionTitle}>Transactions</Text>
-            <View style={styles.categoryDropdownContainer}>
-              <TouchableOpacity 
-                style={styles.dropdownButton}
-                onPress={() => setShowCategoryModal(!showCategoryModal)}
-              >
-                <Text style={styles.dropdownText}>{selectedCategory}</Text>
-                <Ionicons 
-                  name={showCategoryModal ? "chevron-up" : "chevron-down"} 
-                  size={16} 
-                  color="#666" 
-                />
-              </TouchableOpacity>
-              
-              {showCategoryModal && (
-                <View style={styles.dropdownList}>
-                  {getAvailableCategories(transactions).map((category) => (
-                    <TouchableOpacity
-                      key={category}
-                      style={[
-                        styles.dropdownItem,
-                        selectedCategory === category && styles.selectedDropdownItem
-                      ]}
-                      onPress={() => {
-                        setSelectedCategory(category);
-                        setShowCategoryModal(false);
-                      }}
-                    >
-                      <Text style={[
-                        styles.dropdownItemText,
-                        selectedCategory === category && styles.selectedDropdownItemText
-                      ]}>{category}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
-
-          <ScrollView style={styles.transactionsList}>
-            {transactions.map((transaction, index) => (
-              <View key={index} style={styles.transactionCard}>
-                <View style={[
-                  styles.categoryIcon,
-                  { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
-                ]}>
-                  <Ionicons
-                    name={getCategoryIcon(transaction.category)}
-                    size={28}
-                    color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
-                  />
-                </View>
-                <View style={styles.transactionDetails}>
-                  <View>
-                    <Text style={styles.transactionTitle}>{transaction.title}</Text>
-                    <Text style={styles.transactionTime}>{formatTime(transaction.timestamp)}</Text>
-                  </View>
-                  <View style={styles.amountContainer}>
-                    <Text style={[
-                      styles.transactionAmount,
-                      { color: transaction.type === 'income' ? '#22c55e' : '#ef4444' }
-                    ]}>
-                      {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)} VNĐ
-                    </Text>
-                    <View style={styles.accountInfo}>
-                      <Text style={styles.accountName}>Cash</Text>
-                      <View style={[
-                        styles.typeIndicator,
-                        { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
-                      ]}>
-                        <Ionicons
-                          name={transaction.type === 'income' ? 'arrow-up' : 'arrow-down'}
-                          size={8}
-                          color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
-                        />
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
+          {/* Phần giao diện cho tab "Chi tiêu theo ngày" */}
         </View>
       );
     } else {
+      const spendingData = categoryTotals.map((category) => ({
+        category: category.category,
+        amount: category.totalExpense, // Sử dụng tổng chi tiêu
+        color: getCategoryColor(category.category), // Lấy màu sắc
+      }));
+  
       return (
         <View style={styles.monthlyStatsContainer}>
-          <Text style={styles.monthlyStatsTitle}>Thống kê theo tháng</Text>
-          {/* Thêm các thành phần thống kê ở đây */}
+          {/* Hiển thị totalBalance */}
+          <View style={styles.balanceContainer}>
+            <Text style={styles.balanceText}>Ngân sách:</Text>
+            <Text style={[
+              styles.balanceAmount,
+              { color: '#22c55e'}
+            ]}>
+              {formatCurrency(totalBalance)} VNĐ
+            </Text>
+          </View>
+  
+          {/* Hiển thị biểu đồ */}
+          <PieChart data={spendingData} totalBalance={totalBalance} />
         </View>
       );
     }
@@ -733,6 +767,67 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     marginBottom: 16,
+  },
+  categoryTotalCard: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(23, 23, 23, 0.5)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  categoryDetails: {
+    flex: 1,
+  },
+  categoryName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  categoryAmount: {
+    color: '#9ca3af',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  chartContainer: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  legendContainer: {
+    marginTop: 20,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  legendColor: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  legendText: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  balanceContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'rgba(23, 23, 23, 0.5)',
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  balanceText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '500',
+  },
+  balanceAmount: {
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
 
