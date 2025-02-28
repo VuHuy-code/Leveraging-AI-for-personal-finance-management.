@@ -1,4 +1,4 @@
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import Papa from 'papaparse';
 
 interface Expense {
@@ -58,7 +58,6 @@ export const saveExpenseToCSV = async (
   const storage = getStorage();
   const fileRef = ref(storage, storagePath);
 
-
   try {
     let existingContent = '';
     let isNewFile = false;
@@ -91,6 +90,13 @@ export const saveExpenseToCSV = async (
 
     const blob = new Blob([finalContent], { type: 'text/csv' });
     await uploadBytes(fileRef, blob);
+
+    // Cập nhật tổng chi tiêu từng mục
+    await updateCategoryTotals(userId, {
+      category: expenseData.category,
+      amount: expenseData.amount,
+      type: expenseData.type,
+    });
 
   } catch (error) {
     console.error('Error saving expense to CSV:', error);
@@ -523,7 +529,7 @@ export interface Wallet {
   currentBalance: number;
   createdAt: string;
   lastResetDate: string;
-  lastProcessedTime?: number; // New field to track processed transactions
+  lastProcessedTime?: number;
   isActive: boolean;
 }
 
@@ -533,82 +539,117 @@ interface UserBalance {
   lastResetDate: string;
 }
 
-export const updateWallet = async (userId: string, wallet: Wallet): Promise<void> => {
-  if (!userId) throw new Error('User ID is required');
-  
-  const wallets = await getWallets(userId);
-  const updatedWallets = wallets.map(w => 
-    w.id === wallet.id ? wallet : w
-  );
-  
-  await saveWallets(userId, updatedWallets);
-};
-// Add these functions
-export const saveWallets = async (userId: string, wallets: Wallet[]): Promise<void> => {
-  if (!userId) throw new Error('User ID is required');
-  
-  const storage = getStorage();
-  const walletsPath = `wallets/${userId}/wallets.json`;
-  const fileRef = ref(storage, walletsPath);
+// 📌 Trả về đường dẫn Firebase Storage của ví người dùng
+const getWalletPath = (userId: string) => `wallets/${userId}/wallet.json`;
+const getBalancePath = (userId: string) => `balances/${userId}/balance.json`;
 
-  try {
-    const blob = new Blob([JSON.stringify(wallets)], { type: 'application/json' });
-    await uploadBytes(fileRef, blob);
-  } catch (error) {
-    console.error('Error saving wallets:', error);
-    throw error;
-  }
-};
-
-export const getWallets = async (userId: string): Promise<Wallet[]> => {
-  if (!userId) throw new Error('User ID is required');
+/**
+ * 🏦 Lấy ví của người dùng
+ */
+export const getWallet = async (userId: string): Promise<Wallet | null> => {
+  if (!userId) throw new Error("User ID is required");
 
   const storage = getStorage();
-  const walletsPath = `wallets/${userId}/wallets.json`;
-  const fileRef = ref(storage, walletsPath);
+  const fileRef = ref(storage, getWalletPath(userId));
 
   try {
     const url = await getDownloadURL(fileRef);
     const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error('Failed to fetch wallets data');
-    }
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
+    return await response.json();
   } catch (error: any) {
-    // Khi chưa có ví, trả về mảng rỗng và không log lỗi
-    if (error.code === 'storage/object-not-found') {
-      console.log('You haven\'t added any wallets yet. Please create a new wallet.'); 
-      return [];
+    if (error.code === "storage/object-not-found") {
+      console.log("No wallet found. Please create a new wallet.");
+      return null;
     }
-    // Log các lỗi khác nếu có
-    console.error('Error getting wallets:', error);
+    console.error("Error getting wallet:", error);
     throw error;
   }
 };
 
-export const saveUserBalance = async (userId: string, balance: UserBalance): Promise<void> => {
+/**
+ * 💾 Lưu ví vào Firebase Storage
+ */
+export const saveWallet = async (userId: string, wallet: Wallet | null): Promise<void> => {
   if (!userId) throw new Error('User ID is required');
-  
+
   const storage = getStorage();
-  const balancePath = `balances/${userId}/balance.json`;
-  const fileRef = ref(storage, balancePath);
+  const walletPath = `wallets/${userId}/wallet.json`;
+  const fileRef = ref(storage, walletPath);
 
   try {
-    const blob = new Blob([JSON.stringify(balance)], { type: 'application/json' });
+    if (wallet === null) {
+      // 🗑️ Xóa file nếu wallet là null
+      await deleteObject(fileRef);
+      return;
+    }
+
+    const blob = new Blob([JSON.stringify(wallet)], { type: 'application/json' });
     await uploadBytes(fileRef, blob);
   } catch (error) {
-    console.error('Error saving balance:', error);
+    console.error('Error saving wallet:', error);
     throw error;
   }
 };
 
-export const getUserBalance = async (userId: string): Promise<UserBalance | null> => {
-  if (!userId) throw new Error('User ID is required');
+
+/**
+ * 🔄 Cập nhật thông tin ví
+ */
+export const updateWallet = async (userId: string, updatedWallet: Wallet): Promise<void> => {
+  if (!userId) throw new Error("User ID is required");
+
+  try {
+    await saveWallet(userId, updatedWallet);
+  } catch (error) {
+    console.error("Error updating wallet:", error);
+    throw error;
+  }
+};
+
+/**
+ * 💰 Cập nhật số dư hiện tại của ví
+ */
+export const updateWalletBalance = async (userId: string, newCurrentBalance: number): Promise<void> => {
+  if (!userId) throw new Error("User ID is required");
+
+  try {
+    const wallet = await getWallet(userId);
+    if (!wallet) throw new Error("Wallet not found");
+
+    wallet.currentBalance = newCurrentBalance;
+    await saveWallet(userId, wallet);
+  } catch (error) {
+    console.error("Error updating wallet balance:", error);
+    throw error;
+  }
+};
+
+/**
+ * 💾 Lưu số dư tổng của người dùng
+ */
+export const saveUserBalance = async (userId: string, balance: UserBalance): Promise<void> => {
+  if (!userId) throw new Error("User ID is required");
 
   const storage = getStorage();
-  const balancePath = `balances/${userId}/balance.json`;
-  const fileRef = ref(storage, balancePath);
+  const fileRef = ref(storage, getBalancePath(userId));
+
+  try {
+    const blob = new Blob([JSON.stringify(balance)], { type: "application/json" });
+    await uploadBytes(fileRef, blob);
+  } catch (error) {
+    console.error("Error saving balance:", error);
+    throw error;
+  }
+};
+
+/**
+ * 📊 Lấy số dư tổng của người dùng
+ */
+export const getUserBalance = async (userId: string): Promise<UserBalance | null> => {
+  if (!userId) throw new Error("User ID is required");
+
+  const storage = getStorage();
+  const fileRef = ref(storage, getBalancePath(userId));
 
   try {
     const url = await getDownloadURL(fileRef);
@@ -619,116 +660,56 @@ export const getUserBalance = async (userId: string): Promise<UserBalance | null
   }
 };
 
-// Add this new function to calculate daily trends
+/**
+ * 📉 Tính toán xu hướng thu nhập và chi tiêu hàng ngày
+ */
 export const calculateDailyTrends = async (userId: string): Promise<{
   expenseTrend: number;
   incomeTrend: number;
 }> => {
-  // Get today's date
   const today = new Date();
-  
-  // Get yesterday's date
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
 
   try {
-    // Get today's expenses
     const todayExpenses = await getDailyExpenses(userId, today);
-    
-    // Get yesterday's expenses
     const yesterdayExpenses = await getDailyExpenses(userId, yesterday);
 
-    // Calculate totals for today
     const todayTotals = todayExpenses.reduce(
       (acc, expense) => {
         const amount = parseFloat(expense.amount);
-        if (expense.type === 'expense') {
-          acc.expenses += amount;
-        } else {
-          acc.income += amount;
-        }
+        if (expense.type === "expense") acc.expenses += amount;
+        else acc.income += amount;
         return acc;
       },
       { expenses: 0, income: 0 }
     );
 
-    // Calculate totals for yesterday
     const yesterdayTotals = yesterdayExpenses.reduce(
       (acc, expense) => {
         const amount = parseFloat(expense.amount);
-        if (expense.type === 'expense') {
-          acc.expenses += amount;
-        } else {
-          acc.income += amount;
-        }
+        if (expense.type === "expense") acc.expenses += amount;
+        else acc.income += amount;
         return acc;
       },
       { expenses: 0, income: 0 }
     );
 
-    // Calculate percentage changes
-    const expenseTrend = yesterdayTotals.expenses === 0 
-      ? 0 
+    const expenseTrend = yesterdayTotals.expenses === 0
+      ? 0
       : ((todayTotals.expenses - yesterdayTotals.expenses) / yesterdayTotals.expenses) * 100;
 
-    const incomeTrend = yesterdayTotals.income === 0 
-      ? 0 
+    const incomeTrend = yesterdayTotals.income === 0
+      ? 0
       : ((todayTotals.income - yesterdayTotals.income) / yesterdayTotals.income) * 100;
 
     return {
       expenseTrend: Number(expenseTrend.toFixed(2)),
-      incomeTrend: Number(incomeTrend.toFixed(2))
+      incomeTrend: Number(incomeTrend.toFixed(2)),
     };
   } catch (error) {
-    console.error('Error calculating daily trends:', error);
-    return {
-      expenseTrend: 0,
-      incomeTrend: 0
-    };
-  }
-};
-
-// Add this new function
-export const getAllExpenses = async (userId: string): Promise<Expense[]> => {
-  if (!userId) throw new Error('User ID is required');
-
-  const today = new Date();
-  const startDate = new Date(today.getFullYear(), today.getMonth(), 1); // First day of current month
-  const endDate = today; // Current date
-  
-  try {
-    const fileUrls = await getCSVFilesInRange(userId, startDate, endDate);
-    const allExpenses: Expense[] = [];
-    
-    for (const url of fileUrls) {
-      const response = await fetch(url);
-      const csvContent = await response.text();
-      const expenses = parseCSVToExpenses(csvContent);
-      allExpenses.push(...expenses);
-    }
-    
-    return allExpenses;
-  } catch (error) {
-    console.error('Error getting all expenses:', error);
-    return [];
-  }
-};
-
-export const updateWalletBalance = async (userId: string, walletId: string, newCurrentBalance: number): Promise<void> => {
-  if (!userId) throw new Error('User ID is required');
-  
-  try {
-    const wallets = await getWallets(userId);
-    const updatedWallets = wallets.map(wallet => 
-      wallet.id === walletId 
-        ? { ...wallet, currentBalance: newCurrentBalance }
-        : wallet
-    );
-    
-    await saveWallets(userId, updatedWallets);
-  } catch (error) {
-    console.error('Error updating wallet balance:', error);
-    throw error;
+    console.error("Error calculating daily trends:", error);
+    return { expenseTrend: 0, incomeTrend: 0 };
   }
 };
 
@@ -826,4 +807,90 @@ export const addToSavingGoal = async (userId: string, goalNameOrId: string, amou
   await updateSavingGoal(userId, goal.id, { current: updatedGoal.current });
   
   return { success: true, goal: updatedGoal };
+};
+
+interface CategoryTotal {
+  category: string;
+  totalExpense: number;
+  totalIncome: number;
+}
+
+const getCategoryTotalsPath = (userId: string): string => {
+  return `categoryTotals/${userId}/totals.json`;
+};
+
+export const updateCategoryTotals = async (
+  userId: string,
+  expenseData: {
+    category: string;
+    amount: string;
+    type: 'income' | 'expense';
+  }
+): Promise<void> => {
+  if (!userId) throw new Error('User ID is required');
+
+  const storage = getStorage();
+  const fileRef = ref(storage, getCategoryTotalsPath(userId));
+
+  try {
+    let existingTotals: CategoryTotal[] = [];
+
+    // Kiểm tra xem file tồn tại chưa
+    try {
+      const url = await getDownloadURL(fileRef);
+      const response = await fetch(url);
+      existingTotals = await response.json();
+    } catch (error) {
+      console.log('No existing category totals found. Creating new file.');
+    }
+
+    const amount = parseFloat(expenseData.amount);
+    const categoryIndex = existingTotals.findIndex(
+      (item) => item.category === expenseData.category
+    );
+
+    if (categoryIndex !== -1) {
+      // Cập nhật tổng chi tiêu hoặc thu nhập nếu danh mục đã tồn tại
+      if (expenseData.type === 'expense') {
+        existingTotals[categoryIndex].totalExpense += amount;
+      } else {
+        existingTotals[categoryIndex].totalIncome += amount;
+      }
+    } else {
+      // Thêm danh mục mới nếu chưa tồn tại
+      existingTotals.push({
+        category: expenseData.category,
+        totalExpense: expenseData.type === 'expense' ? amount : 0,
+        totalIncome: expenseData.type === 'income' ? amount : 0,
+      });
+    }
+
+    // Lưu lại vào file
+    const blob = new Blob([JSON.stringify(existingTotals)], {
+      type: 'application/json',
+    });
+    await uploadBytes(fileRef, blob);
+  } catch (error) {
+    console.error('Error updating category totals:', error);
+    throw error;
+  }
+};
+
+export const getCategoryTotals = async (userId: string): Promise<CategoryTotal[]> => {
+  if (!userId) throw new Error('User ID is required');
+
+  const storage = getStorage();
+  const fileRef = ref(storage, getCategoryTotalsPath(userId));
+
+  try {
+    const url = await getDownloadURL(fileRef);
+    const response = await fetch(url);
+    return await response.json();
+  } catch (error: any) {
+    if (error.code === 'storage/object-not-found') {
+      return [];
+    }
+    console.error('Error getting category totals:', error);
+    throw error;
+  }
 };

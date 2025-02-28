@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Modal, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
   TextInput,
   ScrollView,
-  Platform 
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useWalletContext } from '../../contexts/WalletContext'; // Ensure correct path
 import { useAuth } from '../../hooks/useAuth';
-import { Swipeable } from 'react-native-gesture-handler';
 
 interface WalletProps {
   isVisible: boolean;
@@ -26,22 +25,21 @@ const formatNumber = (text: string): string => {
   return cleanNumber.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 };
 
-const WalletScreen: React.FC<WalletProps> = ({ 
-  isVisible, 
-  onClose, 
+const WalletScreen: React.FC<WalletProps> = ({
+  isVisible,
+  onClose,
   onWalletCreate,
-  currentBalance 
+  currentBalance,
 }) => {
   const { user } = useAuth();
-  const { wallets, activeWallet, createWallet, selectWallet, deleteWallet, updateWallet } = useWalletContext();
+  const { wallet, createWallet, updateWallet, deleteWallet } = useWalletContext();
   const [isCreateModalVisible, setCreateModalVisible] = useState(false);
   const [newWalletName, setNewWalletName] = useState('');
   const [newWalletBalance, setNewWalletBalance] = useState('');
   const [isEditModalVisible, setEditModalVisible] = useState(false);
-  const [editingWallet, setEditingWallet] = useState<{ id: string; name: string; balance: number } | null>(null);
   const [editWalletName, setEditWalletName] = useState('');
   const [editWalletBalance, setEditWalletBalance] = useState('');
-  
+
   const handleCreateWallet = async () => {
     if (newWalletName && newWalletBalance && user) {
       const initialBalance = parseInt(newWalletBalance.replace(/,/g, ''), 10);
@@ -49,45 +47,25 @@ const WalletScreen: React.FC<WalletProps> = ({
       setNewWalletName('');
       setNewWalletBalance('');
       setCreateModalVisible(false);
-      if (activeWallet) {
-        onWalletCreate(activeWallet.currentBalance); // Update parent with new balance
-      }
+      onWalletCreate(initialBalance); // Update parent with new balance
     }
-  };
-
-  const handleSelectWallet = async (walletId: string) => {
-    await selectWallet(walletId);
-    const selectedWallet = wallets.find(w => w.id === walletId);
-    if (selectedWallet) {
-      onWalletCreate(selectedWallet.currentBalance); // Pass the current balance of selected wallet
-    }
-    onClose();
-  };
-
-  const handleDeleteWallet = async (walletId: string) => {
-    // Disable delete functionality
-    console.log('Wallet deletion is disabled');
-    return;
   };
 
   const handleEditWallet = async () => {
-    if (!editingWallet || !editWalletName || !editWalletBalance) return;
-    
+    if (!wallet || !editWalletName || !editWalletBalance) return;
+
     try {
       const newBalance = parseInt(editWalletBalance.replace(/,/g, ''), 10);
-      await updateWallet(editingWallet.id, {
+      await updateWallet({
         name: editWalletName,
         balance: newBalance,
         currentBalance: newBalance,
       });
-      
-      // Update the current balance in parent component if editing active wallet
-      if (editingWallet.id === activeWallet?.id) {
-        onWalletCreate(newBalance);
-      }
-      
+
+      // Update the current balance in parent component
+      onWalletCreate(newBalance);
+
       setEditModalVisible(false);
-      setEditingWallet(null);
       setEditWalletName('');
       setEditWalletBalance('');
     } catch (error) {
@@ -95,28 +73,14 @@ const WalletScreen: React.FC<WalletProps> = ({
     }
   };
 
-  const renderRightActions = (walletId: string) => {
-    const wallet = wallets.find(w => w.id === walletId);
-    if (!wallet) return null;
-  
-    return (
-      <TouchableOpacity
-        style={styles.editButton}
-        onPress={() => {
-          setEditingWallet(wallet);
-          setEditWalletName(wallet.name);
-          setEditWalletBalance(wallet.balance.toString());
-          setEditModalVisible(true);
-        }}
-      >
-        <Ionicons name="pencil" size={24} color="#fff" />
-      </TouchableOpacity>
-    );
-  };
-
-  // Add function to calculate total initial balance
-  const calculateTotalInitialBalance = () => {
-    return wallets.reduce((total, wallet) => total + wallet.balance, 0);
+  const handleDeleteWallet = async () => {
+    try {
+      await deleteWallet();
+      onWalletCreate(0); // Reset balance in parent component
+      onClose();
+    } catch (error) {
+      console.error('Error deleting wallet:', error);
+    }
   };
 
   return (
@@ -126,66 +90,51 @@ const WalletScreen: React.FC<WalletProps> = ({
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>My Wallets</Text>
+          <Text style={styles.headerTitle}>My Wallet</Text>
         </View>
 
         <View style={styles.balanceSection}>
           <Text style={styles.balanceLabel}>Initial Balance</Text>
           <Text style={styles.balanceAmount}>
-            {calculateTotalInitialBalance().toLocaleString('vi-VN')} VNĐ
+            {wallet?.balance.toLocaleString('vi-VN') || '0'} VNĐ
           </Text>
         </View>
 
         <ScrollView style={styles.walletsList}>
-          {wallets.length === 0 ? (
+          {!wallet ? (
             <View style={styles.emptyStateContainer}>
               <Text style={styles.emptyStateText}>
-                You haven't added any wallets yet.
+                You haven't created a wallet yet.
               </Text>
               <Text style={styles.emptyStateSubText}>
                 Tap the button below to create your wallet.
               </Text>
             </View>
           ) : (
-            wallets.map((wallet) => (
-              <Swipeable
-                key={wallet.id}
-                renderRightActions={() => renderRightActions(wallet.id)}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.walletItem,
-                    wallet.isActive && styles.activeWalletItem
-                  ]}
-                  onPress={() => handleSelectWallet(wallet.id)}
-                >
-                  <View style={styles.walletIcon}>
-                    <Ionicons 
-                      name={wallet.isActive ? "wallet" : "wallet-outline"} 
-                      size={24} 
-                      color="#fff" 
-                    />
-                  </View>
-                  <View style={styles.walletInfo}>
-                    <Text style={styles.walletName}>{wallet.name}</Text>
-                    <Text style={styles.walletBalance}>
-                      Initial Balance: {wallet.balance.toLocaleString('vi-VN')} VNĐ
-                    </Text>
-                  </View>
-                  {wallet.isActive && (
-                    <View style={styles.activeIndicator}>
-                      <Ionicons name="checkmark-circle" size={24} color="#fff" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </Swipeable>
-            ))
+            <TouchableOpacity
+              style={styles.walletItem}
+              onPress={() => {
+                setEditWalletName(wallet.name);
+                setEditWalletBalance(wallet.balance.toString());
+                setEditModalVisible(true);
+              }}
+            >
+              <View style={styles.walletIcon}>
+                <Ionicons name="wallet" size={24} color="#fff" />
+              </View>
+              <View style={styles.walletInfo}>
+                <Text style={styles.walletName}>{wallet.name}</Text>
+                <Text style={styles.walletBalance}>
+                  Initial Balance: {wallet.balance.toLocaleString('vi-VN')} VNĐ
+                </Text>
+              </View>
+            </TouchableOpacity>
           )}
         </ScrollView>
 
-        {/* Only show Create New Wallet button if no wallet exists */}
-        {wallets.length === 0 && (
-          <TouchableOpacity 
+        {/* Show Create New Wallet button if no wallet exists */}
+        {!wallet && (
+          <TouchableOpacity
             style={styles.addButton}
             onPress={() => setCreateModalVisible(true)}
           >
@@ -199,7 +148,7 @@ const WalletScreen: React.FC<WalletProps> = ({
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Create New Wallet</Text>
-              
+
               <TextInput
                 style={styles.input}
                 placeholder="Wallet Name"
@@ -207,7 +156,7 @@ const WalletScreen: React.FC<WalletProps> = ({
                 value={newWalletName}
                 onChangeText={setNewWalletName}
               />
-              
+
               <TextInput
                 style={styles.input}
                 placeholder="Initial Balance"
@@ -218,14 +167,14 @@ const WalletScreen: React.FC<WalletProps> = ({
               />
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => setCreateModalVisible(false)}
                 >
                   <Text style={styles.buttonText}>Cancel</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                   style={[styles.modalButton, styles.createButton]}
                   onPress={handleCreateWallet}
                 >
@@ -241,7 +190,7 @@ const WalletScreen: React.FC<WalletProps> = ({
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Edit Wallet</Text>
-              
+
               <TextInput
                 style={styles.input}
                 placeholder="Wallet Name"
@@ -249,7 +198,7 @@ const WalletScreen: React.FC<WalletProps> = ({
                 value={editWalletName}
                 onChangeText={setEditWalletName}
               />
-              
+
               <TextInput
                 style={styles.input}
                 placeholder="Initial Balance"
@@ -260,17 +209,16 @@ const WalletScreen: React.FC<WalletProps> = ({
               />
 
               <View style={styles.modalButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => {
                     setEditModalVisible(false);
-                    setEditingWallet(null);
                   }}
                 >
                   <Text style={styles.buttonText}>Cancel</Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity 
+
+                <TouchableOpacity
                   style={[styles.modalButton, styles.createButton]}
                   onPress={handleEditWallet}
                 >

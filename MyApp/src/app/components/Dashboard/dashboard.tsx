@@ -90,7 +90,7 @@ const Dashboard: React.FC = () => {
   const { user, userData, logout, updateProfile } = useAuth();
   
   // Add these context hooks
-  const { activeWallet } = useWalletContext();
+  const { wallet } = useWalletContext();
   const { refreshKey } = useTransactionContext();
   
   // Update userData creation
@@ -315,8 +315,8 @@ const Dashboard: React.FC = () => {
         setExpense(totals.expense);
 
         // Get current balance from active wallet
-        if (activeWallet) {
-          setCurrentBalance(activeWallet.currentBalance);
+        if (wallet) {
+          setCurrentBalance(wallet.currentBalance);
         }
 
         // Get expense trend
@@ -328,7 +328,7 @@ const Dashboard: React.FC = () => {
     };
 
     checkTodayTransactions();
-  }, [user, activeWallet, refreshKey]);
+  }, [user, wallet, refreshKey]);
 
   return (
     <View style={styles.container}>

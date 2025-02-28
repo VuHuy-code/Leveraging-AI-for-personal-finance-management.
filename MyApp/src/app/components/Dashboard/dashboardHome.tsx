@@ -1,30 +1,24 @@
-import React, { useEffect, useState, useCallback } from 'react'; // Import useCallback
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
-import { Ionicons,MaterialIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { getUserTransactions } from '../../../services/firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
 import { useTransactionContext } from '../../contexts/TransactionContext';
 import AIinsight from './AIinsight';
 import {
   getExpensesFromCSV,
-  getUserBalance,
-  saveUserBalance,
-  getWallets,
-  Wallet,
-  saveWallets,
   calculateDailyTrends,
   updateWallet,
-} from '../../../services/firebase/storage'; // Đường dẫn đến file chứa hàm getExpensesFromCSV
+} from '../../../services/firebase/storage';
 import { useRouter } from 'expo-router';
 import WalletScreen from './wallet';
-import { useWalletContext } from '../../contexts/WalletContext'; // <--- Lấy từ context
-
+import { useWalletContext } from '../../contexts/WalletContext';
 
 interface HomeProps {
   userData: {
     uid: string;
-    avatarUrl?: string;  // Make optional
-    name?: string;       // Make optional
+    avatarUrl?: string;
+    name?: string;
   };
 }
 
@@ -36,144 +30,112 @@ interface Transaction {
   type: 'expense' | 'income';
   category: string;
   account: string;
-  rawTimestamp: number; // Add this field
+  rawTimestamp: number;
 }
 
-// Add this function at the top of your component, after the interfaces
 const formatCurrency = (amount: number) => {
-  // Remove decimal places and format with thousand separators
   return Math.floor(amount).toLocaleString('vi-VN');
 };
 
-// Add this helper function to check if a date is today
 const isToday = (timestamp: string) => {
   const date = new Date(timestamp);
   const today = new Date();
-  return date.getDate() === today.getDate() &&
+  return (
+    date.getDate() === today.getDate() &&
     date.getMonth() === today.getMonth() &&
-    date.getFullYear() === today.getFullYear();
+    date.getFullYear() === today.getFullYear()
+  );
 };
 
 const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
   const router = useRouter();
-  const { refreshKey, refreshTransactions } = useTransactionContext(); // Get refreshTransactions
+  const { refreshKey, refreshTransactions } = useTransactionContext();
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [totalBalance, setTotalBalance] = useState(0); // Initial/fixed balance
-  const [currentBalance, setCurrentBalance] = useState(0); // Current balance after today's transactions
+  const [totalBalance, setTotalBalance] = useState(0);
+  const [currentBalance, setCurrentBalance] = useState(0);
   const [expense, setExpense] = useState(0);
   const [income, setIncome] = useState(0);
   const [isWalletModalVisible, setWalletModalVisible] = useState(false);
-  const { activeWallet, wallets } = useWalletContext();
+  const { wallet } = useWalletContext();
   const [expenseTrend, setExpenseTrend] = useState(0);
   const [incomeTrend, setIncomeTrend] = useState(0);
 
-  // Use useCallback to memoize handleWalletCreate
+  // Handle wallet creation or update
   const handleWalletCreate = useCallback((newBalance: number) => {
-    refreshTransactions();
+    refreshTransactions(); // Refresh transactions when wallet is created or updated
   }, [refreshTransactions]);
 
-  // SIMPLIFIED LOGIC: Single useEffect to handle wallet and balance updates
+  // Load wallet and transactions
   useEffect(() => {
     const loadWalletAndTransactions = async () => {
-      if (!user || !activeWallet) return;
-  
+      if (!user || ! wallet) return;
+
       try {
-        // 1. Get all transactions for today
+        // Get all transactions for today
         const csvTransactions = await getExpensesFromCSV(user.uid);
-        const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
-  
-        // Format and set all today's transactions for display
+        const todayTransactions = csvTransactions.filter((t) => isToday(t.timestamp));
+
+        // Format transactions
         const formattedTransactions = todayTransactions
           .map((t) => ({
             id: `${t.timestamp}-${Math.random()}`,
             title: t.title,
             time: new Date(t.timestamp).toLocaleString('vi-VN', {
               hour: '2-digit',
-              minute: '2-digit'
+              minute: '2-digit',
             }),
             amount: parseFloat(t.amount),
             type: t.type as 'income' | 'expense',
             category: t.category,
             account: 'Cash',
-            rawTimestamp: new Date(t.timestamp).getTime()
+            rawTimestamp: new Date(t.timestamp).getTime(),
           }))
           .sort((a, b) => b.rawTimestamp - a.rawTimestamp);
-        
+
         setTransactions(formattedTransactions);
-  
-        // Calculate and display ALL of today's totals
-        const allTodayTotals = todayTransactions.reduce((acc, t) => {
-          const amount = parseFloat(t.amount);
-          if (t.type === 'income') {
-            acc.income += amount;
-          } else {
-            acc.expense += amount;
-          }
-          return acc;
-        }, { income: 0, expense: 0 });
-        
-        // Set income and expense from all today's transactions
+
+        // Calculate totals
+        const allTodayTotals = todayTransactions.reduce(
+          (acc, t) => {
+            const amount = parseFloat(t.amount);
+            if (t.type === 'income') {
+              acc.income += amount;
+            } else {
+              acc.expense += amount;
+            }
+            return acc;
+          },
+          { income: 0, expense: 0 }
+        );
+
         setIncome(allTodayTotals.income);
         setExpense(allTodayTotals.expense);
-  
-        // Get the last processed transaction timestamp from the wallet
-        const lastProcessedTime = activeWallet.lastProcessedTime || 0;
-        
-        // Only count UNPROCESSED transactions for balance updates
-        const unprocessedTransactions = todayTransactions.filter(
-          t => new Date(t.timestamp).getTime() > lastProcessedTime
-        );
-  
-        // Calculate balance changes from unprocessed transactions only
-        const unprocessedTotals = unprocessedTransactions.reduce((acc, t) => {
-          const amount = parseFloat(t.amount);
-          if (t.type === 'income') {
-            acc.income += amount;
-          } else {
-            acc.expense += amount;
-          }
-          return acc;
-        }, { income: 0, expense: 0 });
-        
-        // 4. Set the initial/fixed balance
-        setTotalBalance(activeWallet.balance);
-        
-        // 5. Calculate and update the current balance based on only new transactions
-        const newCurrentBalance = activeWallet.currentBalance + unprocessedTotals.income - unprocessedTotals.expense;
+
+        // Update current balance
+        const newCurrentBalance = wallet.currentBalance + allTodayTotals.income - allTodayTotals.expense;
         setCurrentBalance(newCurrentBalance);
-        
-        // 6. Update wallet in storage only if there are unprocessed transactions
-        if (unprocessedTotals.income > 0 || unprocessedTotals.expense > 0) {
-          let latestTimestamp = lastProcessedTime;
-          
-          if (unprocessedTransactions.length > 0) {
-            latestTimestamp = Math.max(
-              ...unprocessedTransactions.map(t => new Date(t.timestamp).getTime()),
-              lastProcessedTime
-            );
-          }
-          
-          const updatedWallet = {
-            ...activeWallet,
-            currentBalance: newCurrentBalance,
-            lastProcessedTime: latestTimestamp
-          };
-          await updateWallet(user.uid, updatedWallet);
-        }
+
+        // Update wallet in storage
+        const updatedWallet = {
+          ...wallet,
+          currentBalance: newCurrentBalance,
+          lastProcessedTime: Date.now(),
+        };
+        await updateWallet(user.uid, updatedWallet);
       } catch (error) {
         console.error('Error loading wallet and transactions:', error);
       }
     };
 
     loadWalletAndTransactions();
-  }, [user, activeWallet, refreshKey, refreshTransactions]);
+  }, [user, wallet, refreshKey]);
 
-  // Separate useEffect for trends calculation
+  // Calculate trends
   useEffect(() => {
     const calculateTrends = async () => {
       if (!user) return;
-      
+
       try {
         const trends = await calculateDailyTrends(user.uid);
         setExpenseTrend(trends.expenseTrend);
@@ -186,50 +148,15 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
     calculateTrends();
   }, [user, refreshKey]);
 
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'Ăn uống':
-        return 'fast-food';
-      case 'Lương tháng':
-        return 'briefcase';
-      case 'Y tế':
-        return 'medical';
-      case 'Mua sắm':
-        return 'cart';
-      case 'Di chuyển':
-        return 'car-sport';
-      case 'Hóa đơn':
-        return 'receipt';
-      case 'Giải trí':
-        return 'film';
-      case 'Giáo dục':
-        return 'school';
-      case 'Đầu tư':
-        return 'trending-up';
-      case 'Tiết kiệm':
-        return 'cash';
-      case 'khác':
-        return 'help';
-      default:
-        return 'logo-usd';
-    }
-  };
-
   return (
     <ScrollView style={styles.container}>
       <View style={styles.headerWrapper}>
-        <Image
-          source={require('../../../assets/images/bgg.png')}
-          style={styles.headerBg}
-        />
+        <Image source={require('../../../assets/images/bgg.png')} style={styles.headerBg} />
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <View style={styles.userInfo}>
               {userData?.avatarUrl && (
-                <Image
-                  source={{ uri: userData.avatarUrl }}
-                  style={styles.avatar}
-                />
+                <Image source={{ uri: userData.avatarUrl }} style={styles.avatar} />
               )}
             </View>
 
@@ -246,8 +173,7 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
 
             <TouchableOpacity
               style={styles.notificationButton}
-              onPress={() => {
-              }}
+              onPress={() => {}}
             >
               <Ionicons name="notifications" size={20} color="#fff" />
             </TouchableOpacity>
@@ -264,15 +190,17 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
             <Text style={styles.overviewLabel}>Expense</Text>
             <Text style={styles.overviewAmount}>{formatCurrency(expense)} VNĐ</Text>
             <View style={styles.trendContainer}>
-              <Ionicons 
-                name={expenseTrend > 0 ? "arrow-up" : "arrow-down"} 
-                size={12} 
-                color={expenseTrend > 0 ? "#ef4444" : "#22c55e"} 
+              <Ionicons
+                name={expenseTrend > 0 ? 'arrow-up' : 'arrow-down'}
+                size={12}
+                color={expenseTrend > 0 ? '#ef4444' : '#22c55e'}
               />
-              <Text style={[
-                styles.trendText,
-                { color: expenseTrend > 0 ? "#ef4444" : "#22c55e" }
-              ]}>
+              <Text
+                style={[
+                  styles.trendText,
+                  { color: expenseTrend > 0 ? '#ef4444' : '#22c55e' },
+                ]}
+              >
                 {Math.abs(expenseTrend).toFixed(2)}% today
               </Text>
             </View>
@@ -282,15 +210,17 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
             <Text style={styles.overviewLabel}>Income</Text>
             <Text style={styles.overviewAmount}>{formatCurrency(income)} VNĐ</Text>
             <View style={styles.trendContainer}>
-              <Ionicons 
-                name={incomeTrend > 0 ? "arrow-up" : "arrow-down"} 
-                size={12} 
-                color={incomeTrend > 0 ? "#22c55e" : "#ef4444"} 
+              <Ionicons
+                name={incomeTrend > 0 ? 'arrow-up' : 'arrow-down'}
+                size={12}
+                color={incomeTrend > 0 ? '#22c55e' : '#ef4444'}
               />
-              <Text style={[
-                styles.trendText,
-                { color: incomeTrend > 0 ? "#22c55e" : "#ef4444" }
-              ]}>
+              <Text
+                style={[
+                  styles.trendText,
+                  { color: incomeTrend > 0 ? '#22c55e' : '#ef4444' },
+                ]}
+              >
                 {Math.abs(incomeTrend).toFixed(2)}% today
               </Text>
             </View>
@@ -300,68 +230,11 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
         <AIinsight userData={userData} />
       </View>
 
-      {/* Temporarily hide transactions section
-      <View style={styles.transactionsSection}>
-        <View style={styles.transactionsHeader}>
-          <Text style={styles.transactionsTitle}>Transactions</Text>
-          <TouchableOpacity>
-            <Text style={styles.showAllButton}>Show All</Text>
-          </TouchableOpacity>
-        </View>
-
-        {transactions.map((transaction) => (
-          <View key={transaction.id} style={styles.transactionCard}>
-            <View style={[
-              styles.categoryIcon,
-              { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
-            ]}>
-              <Ionicons
-                name={getCategoryIcon(transaction.category)}
-                size={28}
-                color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
-              />
-            </View>
-
-            <View style={styles.transactionDetails}>
-              <View>
-                <Text style={styles.transactionTitle}>{transaction.title}</Text>
-                <Text style={styles.transactionTime}>
-                  {`Hôm nay ${transaction.time}`}
-                </Text>
-              </View>
-
-              <View style={styles.amountContainer}>
-                <Text style={[
-                  styles.transactionAmount,
-                  { color: transaction.type === 'income' ? '#22c55e' : '#ef4444' }
-                ]}>
-                  {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)} VNĐ
-                </Text>
-                <View style={styles.accountInfo}>
-                  <Text style={styles.accountName}>{transaction.account}</Text>
-                  <View style={[
-                    styles.typeIndicator,
-                    { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
-                  ]}>
-                    <Ionicons
-                      name={transaction.type === 'income' ? 'arrow-up' : 'arrow-down'}
-                      size={8}
-                      color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
-                    />
-                  </View>
-                </View>
-              </View>
-            </View>
-          </View>
-        ))}
-      </View>
-      */}
-
       <WalletScreen
         isVisible={isWalletModalVisible}
         onClose={() => setWalletModalVisible(false)}
         onWalletCreate={handleWalletCreate}
-        currentBalance={activeWallet?.currentBalance || 0}
+        currentBalance={wallet?.currentBalance || 0}
       />
     </ScrollView>
   );
