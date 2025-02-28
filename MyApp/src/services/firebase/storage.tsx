@@ -569,22 +569,27 @@ export const getWallet = async (userId: string): Promise<Wallet | null> => {
 /**
  * 💾 Lưu ví vào Firebase Storage
  */
+// In services/firebase/storage.tsx
+
 export const saveWallet = async (userId: string, wallet: Wallet | null): Promise<void> => {
   if (!userId) throw new Error('User ID is required');
-
+  
   const storage = getStorage();
   const walletPath = `wallets/${userId}/wallet.json`;
   const fileRef = ref(storage, walletPath);
 
   try {
     if (wallet === null) {
-      // 🗑️ Xóa file nếu wallet là null
+      // Delete the wallet if null is passed
       await deleteObject(fileRef);
       return;
     }
-
-    const blob = new Blob([JSON.stringify(wallet)], { type: 'application/json' });
-    await uploadBytes(fileRef, blob);
+    
+    // Otherwise save/update the wallet
+    const walletData = JSON.stringify(wallet);
+    const file = new Blob([walletData], { type: 'application/json' });
+    await uploadBytes(fileRef, file);
+    console.log('Wallet saved successfully');
   } catch (error) {
     console.error('Error saving wallet:', error);
     throw error;

@@ -69,14 +69,14 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
   // Load wallet and transactions
   useEffect(() => {
     const loadWalletAndTransactions = async () => {
-      if (!user || ! wallet) return;
-
+      if (!user || !wallet) return;
+    
       try {
         // Get all transactions for today
         const csvTransactions = await getExpensesFromCSV(user.uid);
         const todayTransactions = csvTransactions.filter((t) => isToday(t.timestamp));
-
-        // Format transactions
+    
+        // Format transactions for display
         const formattedTransactions = todayTransactions
           .map((t) => ({
             id: `${t.timestamp}-${Math.random()}`,
@@ -92,10 +92,10 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
             rawTimestamp: new Date(t.timestamp).getTime(),
           }))
           .sort((a, b) => b.rawTimestamp - a.rawTimestamp);
-
+    
         setTransactions(formattedTransactions);
-
-        // Calculate totals
+    
+        // Set income and expense from all today's transactions (for display purposes)
         const allTodayTotals = todayTransactions.reduce(
           (acc, t) => {
             const amount = parseFloat(t.amount);
@@ -108,21 +108,53 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
           },
           { income: 0, expense: 0 }
         );
-
+        
         setIncome(allTodayTotals.income);
         setExpense(allTodayTotals.expense);
-
-        // Update current balance
-        const newCurrentBalance = wallet.currentBalance + allTodayTotals.income - allTodayTotals.expense;
+    
+        // Get the last processed time from the wallet
+        const lastProcessedTime = wallet.lastProcessedTime || 0;
+        
+        // IMPORTANT: Only count UNPROCESSED transactions for balance updates
+        const unprocessedTransactions = todayTransactions.filter(
+          t => new Date(t.timestamp).getTime() > lastProcessedTime
+        );
+        
+        // Calculate balance changes from unprocessed transactions only
+        const unprocessedTotals = unprocessedTransactions.reduce(
+          (acc, t) => {
+            const amount = parseFloat(t.amount);
+            if (t.type === 'income') {
+              acc.income += amount;
+            } else {
+              acc.expense += amount;
+            }
+            return acc;
+          },
+          { income: 0, expense: 0 }
+        );
+        
+        // Set the current balance based only on new transactions
+        const newCurrentBalance = wallet.currentBalance + 
+          unprocessedTotals.income - unprocessedTotals.expense;
+        
         setCurrentBalance(newCurrentBalance);
-
-        // Update wallet in storage
-        const updatedWallet = {
-          ...wallet,
-          currentBalance: newCurrentBalance,
-          lastProcessedTime: Date.now(),
-        };
-        await updateWallet(user.uid, updatedWallet);
+    
+        // Only update wallet in storage if there are new unprocessed transactions
+        if (unprocessedTransactions.length > 0) {
+          const latestTimestamp = Math.max(
+            ...unprocessedTransactions.map(t => new Date(t.timestamp).getTime())
+          );
+          
+          const updatedWallet = {
+            ...wallet,
+            currentBalance: newCurrentBalance,
+            lastProcessedTime: latestTimestamp
+          };
+          
+          // Pass userId and the updated wallet object
+          await updateWallet(user.uid, updatedWallet);
+        }
       } catch (error) {
         console.error('Error loading wallet and transactions:', error);
       }
