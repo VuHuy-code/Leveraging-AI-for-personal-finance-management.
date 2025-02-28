@@ -11,10 +11,8 @@ import {
   Dimensions 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getDailyExpenses } from '../../../services/firebase/storage';
+import { getDailyExpenses, getMonthlyExpenses } from '../../../services/firebase/storage';
 import { useTransactionContext } from '../../contexts/TransactionContext';
-
-
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -31,7 +29,7 @@ interface DashboardProps {
   };
 }
 
-// Add this helper function at the top of your file after the imports
+// Helper functions
 const getCategoryIcon = (category: string) => {
   switch (category.toLowerCase()) {
     case 'ăn uống':
@@ -53,12 +51,10 @@ const getCategoryIcon = (category: string) => {
   }
 };
 
-// Add this helper function at the top of your file after the imports
 const formatCurrency = (amount: number) => {
   return Math.floor(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
-// Add this helper function to get unique categories from transactions
 const getAvailableCategories = (transactions: any[]) => {
   const uniqueCategories = new Set(['All']);
   transactions.forEach(transaction => {
@@ -67,7 +63,6 @@ const getAvailableCategories = (transactions: any[]) => {
   return Array.from(uniqueCategories);
 };
 
-// Add this helper function to format time
 const formatTime = (date: Date) => {
   return new Date(date).toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -76,9 +71,7 @@ const formatTime = (date: Date) => {
   });
 };
 
-// Sửa lại hàm calculateWeekDays
 const calculateWeekDays = (date: Date) => {
-  // Đảm bảo giờ là 00:00:00
   const currentDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const day = currentDate.getDay();
   const diff = currentDate.getDate() - day;
@@ -107,14 +100,13 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [weekDays, setWeekDays] = useState(calculateWeekDays(new Date()));
+  const [activeTab, setActiveTab] = useState<'daily' | 'monthly'>('daily'); // State để quản lý tab hiện tại
+  const [monthlyTransactions, setMonthlyTransactions] = useState<any[]>([]); // State cho thống kê tháng
 
-  // Add this ref at the top of your component
   const scrollViewRef = React.useRef<ScrollView>(null);
 
-  // Add this function to handle scrolling
   const scrollToSelectedDay = () => {
     if (scrollViewRef.current) {
-      // Find the index of the selected day
       const selectedIndex = weekDays.findIndex(
         item => 
           item.fullDate.getDate() === selectedDate.getDate() &&
@@ -124,227 +116,157 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
 
       if (selectedIndex !== -1) {
         scrollViewRef.current.scrollTo({
-          x: selectedIndex * 70, // 60 (width) + 10 (marginRight)
+          x: selectedIndex * 70,
           animated: true
         });
       }
     }
   };
 
-  // Add useEffect to trigger scroll when component mounts or selectedDate changes
   useEffect(() => {
-    // Small delay to ensure layout is complete
     setTimeout(scrollToSelectedDay, 50);
   }, [selectedDate]);
 
-  // Rest of your code...
-
-
-  // Categories list
-  const categories = [
-    'All',
-    'Ăn uống',
-    'Di chuyển',
-    'Mua sắm',
-    'Hóa đơn',
-    'Y tế',
-    'Giải trí',
-    'Giáo dục',
-    'Khác'
-  ];
-
-
-  const getWeekDays = (date: Date) => {
-    const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
-    const monday = new Date(date.setDate(diff));
-    const week = [];
-
-    for (let i = 0; i < 7; i++) {
-      const nextDay = new Date(monday);
-      nextDay.setDate(monday.getDate() + i);
-      week.push({
-        day: WEEKDAYS[nextDay.getDay()].substring(0, 2),
-        date: nextDay.getDate(),
-        fullDate: new Date(nextDay)
+  const fetchTransactions = async (date: Date) => {
+    try {
+      const expenses = await getDailyExpenses(userData.uid, date);
+      const sortedExpenses = expenses.sort((a, b) => {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       });
+      setTransactions(sortedExpenses);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
     }
+  };
 
-    return week;
+  const fetchMonthlyTransactions = async (month: number, year: number) => {
+    try {
+      const expenses = await getMonthlyExpenses(userData.uid, month, year);
+      const sortedExpenses = expenses.sort((a, b) => {
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      });
+      setMonthlyTransactions(sortedExpenses);
+    } catch (error) {
+      console.error('Error fetching monthly transactions:', error);
+    }
+  };
+
+  const handleDateSelect = (day: number) => {
+    const newDate = new Date(selectedYear, selectedMonth, day);
+    newDate.setHours(0, 0, 0, 0);
+    setSelectedDate(newDate);
+    setShowFullCalendar(false);
+    fetchTransactions(newDate);
   };
 
   useEffect(() => {
     fetchTransactions(selectedDate);
   }, [selectedDate]);
 
-  
-
-  // Modify the fetchTransactions function
-const fetchTransactions = async (date: Date) => {
-  try {
-    const expenses = await getDailyExpenses(userData.uid, date);
-    // Sort transactions by timestamp in descending order (newest first)
-    const sortedExpenses = expenses.sort((a, b) => {
-      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-    });
-    setTransactions(sortedExpenses);
-  } catch (error) {
-    console.error('Error fetching transactions:', error);
-  }
-};
-
-// Update the filteredTransactions const to maintain the sorting
-const filteredTransactions = selectedCategory === 'All' 
-  ? transactions 
-  : transactions.filter(t => t.category === selectedCategory);
-
-  const getDaysInMonth = (month: number, year: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (month: number, year: number) => {
-    return new Date(year, month, 1).getDay();
-  };
-
-  const generateCalendarDays = () => {
-    const daysInMonth = getDaysInMonth(selectedMonth, selectedYear);
-    const firstDay = getFirstDayOfMonth(selectedMonth, selectedYear);
-    const days = [];
-    
-    // Add empty spaces for days before first of month
-    for (let i = 0; i < firstDay; i++) {
-      days.push(null);
+  useEffect(() => {
+    if (activeTab === 'monthly') {
+      fetchMonthlyTransactions(selectedMonth, selectedYear);
     }
-    
-    // Add all days of month
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
-    
-    return days;
-  };
+  }, [activeTab, selectedMonth, selectedYear]);
 
-  // Sửa lại hàm handleDateSelect
-const handleDateSelect = (day: number) => {
-  const newDate = new Date(selectedYear, selectedMonth, day);
-  // Reset time to beginning of day
-  newDate.setHours(0, 0, 0, 0);
-  setSelectedDate(newDate);
-  setShowFullCalendar(false);
-  fetchTransactions(newDate);
-};
-
-  useEffect(() => {
-    // Cập nhật weekDays khi tháng thay đổi
-    const firstDayOfMonth = new Date(selectedYear, selectedMonth, 1);
-    setWeekDays(calculateWeekDays(firstDayOfMonth));
-  }, [selectedMonth, selectedYear]);
-  
-  useEffect(() => {
-    fetchTransactions(selectedDate);
-  }, [selectedDate]);
-
-  // Add this useEffect to update weekDays when selectedDate changes
-  useEffect(() => {
-    setWeekDays(calculateWeekDays(selectedDate));
-  }, [selectedDate]);
-
-  const renderCalendarModal = () => (
-    <Modal
-      visible={showFullCalendar}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => setShowFullCalendar(false)}
-    >
-      <View style={styles.calendarModalOverlay}>
-        <View style={styles.calendarModalContent}>
-          <View style={styles.calendarHeader}>
-            <TouchableOpacity onPress={() => {
-              if (selectedMonth === 0) {
-                setSelectedYear(selectedYear - 1);
-                setSelectedMonth(11);
-              } else {
-                setSelectedMonth(selectedMonth - 1);
-              }
-            }}>
-              <Ionicons name="chevron-back" size={24} color="#fff" />
-            </TouchableOpacity>
-            
-            <Text style={styles.yearText}>
-              {MONTHS[selectedMonth]} {selectedYear}
-            </Text>
-            
-            <TouchableOpacity onPress={() => {
-              if (selectedMonth === 11) {
-                setSelectedYear(selectedYear + 1);
-                setSelectedMonth(0);
-              } else {
-                setSelectedMonth(selectedMonth + 1);
-              }
-            }}>
-              <Ionicons name="chevron-forward" size={24} color="#fff" />
-            </TouchableOpacity>
+  const renderContent = () => {
+    if (activeTab === 'daily') {
+      return (
+        <View style={styles.transactionsSection}>
+          <View style={styles.transactionsHeader}>
+            <Text style={styles.sectionTitle}>Transactions</Text>
+            <View style={styles.categoryDropdownContainer}>
+              <TouchableOpacity 
+                style={styles.dropdownButton}
+                onPress={() => setShowCategoryModal(!showCategoryModal)}
+              >
+                <Text style={styles.dropdownText}>{selectedCategory}</Text>
+                <Ionicons 
+                  name={showCategoryModal ? "chevron-up" : "chevron-down"} 
+                  size={16} 
+                  color="#666" 
+                />
+              </TouchableOpacity>
+              
+              {showCategoryModal && (
+                <View style={styles.dropdownList}>
+                  {getAvailableCategories(transactions).map((category) => (
+                    <TouchableOpacity
+                      key={category}
+                      style={[
+                        styles.dropdownItem,
+                        selectedCategory === category && styles.selectedDropdownItem
+                      ]}
+                      onPress={() => {
+                        setSelectedCategory(category);
+                        setShowCategoryModal(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.dropdownItemText,
+                        selectedCategory === category && styles.selectedDropdownItemText
+                      ]}>{category}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
 
-          <View style={styles.monthContainer}>
-            <View style={styles.weekdayContainer}>
-              {WEEKDAYS.map(day => (
-                <Text key={day} style={styles.weekdayText}>{day}</Text>
-              ))}
-            </View>
-            <View style={styles.daysContainer}>
-              {generateCalendarDays().map((day, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    styles.dayCell,
-                    day === selectedDate.getDate() &&
-                    selectedMonth === selectedDate.getMonth() &&
-                    selectedYear === selectedDate.getFullYear() &&
-                    styles.selectedDayCell
-                  ]}
-                  onPress={() => day && handleDateSelect(day)}
-                >
-                  {day && (
+          <ScrollView style={styles.transactionsList}>
+            {transactions.map((transaction, index) => (
+              <View key={index} style={styles.transactionCard}>
+                <View style={[
+                  styles.categoryIcon,
+                  { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
+                ]}>
+                  <Ionicons
+                    name={getCategoryIcon(transaction.category)}
+                    size={28}
+                    color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
+                  />
+                </View>
+                <View style={styles.transactionDetails}>
+                  <View>
+                    <Text style={styles.transactionTitle}>{transaction.title}</Text>
+                    <Text style={styles.transactionTime}>{formatTime(transaction.timestamp)}</Text>
+                  </View>
+                  <View style={styles.amountContainer}>
                     <Text style={[
-                      styles.dayNumber,
-                      day === selectedDate.getDate() &&
-                      selectedMonth === selectedDate.getMonth() &&
-                      selectedYear === selectedDate.getFullYear() &&
-                      styles.selectedDayText
+                      styles.transactionAmount,
+                      { color: transaction.type === 'income' ? '#22c55e' : '#ef4444' }
                     ]}>
-                      {day}
+                      {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)} VNĐ
                     </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => setShowFullCalendar(false)}
-          >
-            <Text style={styles.closeButtonText}>Close</Text>
-          </TouchableOpacity>
+                    <View style={styles.accountInfo}>
+                      <Text style={styles.accountName}>Cash</Text>
+                      <View style={[
+                        styles.typeIndicator,
+                        { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
+                      ]}>
+                        <Ionicons
+                          name={transaction.type === 'income' ? 'arrow-up' : 'arrow-down'}
+                          size={8}
+                          color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
         </View>
-      </View>
-    </Modal>
-  );
-
-  const { refreshKey, refreshTransactions } = useTransactionContext(); // Add this
-
-  // Modify the useEffect that fetches transactions to include refreshKey
-  useEffect(() => {
-    fetchTransactions(selectedDate);
-  }, [selectedDate, refreshKey]); // Add refreshKey as dependency
-
-  // Add a new useEffect to refresh transactions when refreshKey changes
-  useEffect(() => {
-    if (refreshKey) {
-      fetchTransactions(selectedDate);
+      );
+    } else {
+      return (
+        <View style={styles.monthlyStatsContainer}>
+          <Text style={styles.monthlyStatsTitle}>Thống kê theo tháng</Text>
+          {/* Thêm các thành phần thống kê ở đây */}
+        </View>
+      );
     }
-  }, [refreshKey, selectedDate]);
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -386,142 +308,74 @@ const handleDateSelect = (day: number) => {
           </View>
         </View>
 
-        {/* Calendar Days */}
-        <ScrollView 
-          ref={scrollViewRef}
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.calendarScroll}
-          onContentSizeChange={scrollToSelectedDay} // Add this line
-        >
-          {weekDays.map((item) => (
-            <TouchableOpacity
-              key={`${item.fullDate.getTime()}`} // Use timestamp as key for uniqueness
-              style={[
-                styles.dayItem,
-                selectedDate.getDate() === item.fullDate.getDate() && 
-                selectedDate.getMonth() === item.fullDate.getMonth() &&
-                selectedDate.getFullYear() === item.fullDate.getFullYear() &&
-                styles.selectedDay
-              ]}
-              onPress={() => {
-                const newDate = new Date(
-                  item.fullDate.getFullYear(),
-                  item.fullDate.getMonth(),
-                  item.fullDate.getDate()
-                );
-                newDate.setHours(0, 0, 0, 0);
-                setSelectedDate(newDate);
-                fetchTransactions(newDate);
-              }}
-            >
-              <Text style={[
-                styles.dayText,
-                selectedDate.getDate() === item.fullDate.getDate() &&
-                selectedDate.getMonth() === item.fullDate.getMonth() &&
-                selectedDate.getFullYear() === item.fullDate.getFullYear() &&
-                styles.selectedDayText
-              ]}>{item.day}</Text>
-              <Text style={[
-                styles.dateText,
-                selectedDate.getDate() === item.fullDate.getDate() &&
-                selectedDate.getMonth() === item.fullDate.getMonth() &&
-                selectedDate.getFullYear() === item.fullDate.getFullYear() &&
-                styles.selectedDayText
-              ]}>{item.date}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+        {/* Tab Bar */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'daily' && styles.activeTab]}
+            onPress={() => setActiveTab('daily')}
+          >
+            <Text style={[styles.tabText, activeTab === 'daily' && styles.activeTabText]}>Chi tiêu theo ngày</Text>
+          </TouchableOpacity>
 
-      {renderCalendarModal()}
-
-      {/* Transactions Section */}
-      <View style={styles.transactionsSection}>
-        <View style={styles.transactionsHeader}>
-          <Text style={styles.sectionTitle}>Transactions</Text>
-          <View style={styles.categoryDropdownContainer}>
-            <TouchableOpacity 
-              style={styles.dropdownButton}
-              onPress={() => setShowCategoryModal(!showCategoryModal)}
-            >
-              <Text style={styles.dropdownText}>{selectedCategory}</Text>
-              <Ionicons 
-                name={showCategoryModal ? "chevron-up" : "chevron-down"} 
-                size={16} 
-                color="#666" 
-              />
-            </TouchableOpacity>
-            
-            {showCategoryModal && (
-              <View style={styles.dropdownList}>
-                {getAvailableCategories(transactions).map((category) => (
-                  <TouchableOpacity
-                    key={category}
-                    style={[
-                      styles.dropdownItem,
-                      selectedCategory === category && styles.selectedDropdownItem
-                    ]}
-                    onPress={() => {
-                      setSelectedCategory(category);
-                      setShowCategoryModal(false);
-                    }}
-                  >
-                    <Text style={[
-                      styles.dropdownItemText,
-                      selectedCategory === category && styles.selectedDropdownItemText
-                    ]}>{category}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === 'monthly' && styles.activeTab]}
+            onPress={() => setActiveTab('monthly')}
+          >
+            <Text style={[styles.tabText, activeTab === 'monthly' && styles.activeTabText]}>Thống kê theo tháng</Text>
+          </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.transactionsList}>
-          {filteredTransactions.map((transaction, index) => (
-            <View key={index} style={styles.transactionCard}>
-              <View style={[
-                styles.categoryIcon,
-                { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
-              ]}>
-                <Ionicons
-                  name={getCategoryIcon(transaction.category)}
-                  size={28}
-                  color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
-                />
-              </View>
-              <View style={styles.transactionDetails}>
-                <View>
-                  <Text style={styles.transactionTitle}>{transaction.title}</Text>
-                  <Text style={styles.transactionTime}>{formatTime(transaction.timestamp)}</Text>
-                </View>
-                <View style={styles.amountContainer}>
-                  <Text style={[
-                    styles.transactionAmount,
-                    { color: transaction.type === 'income' ? '#22c55e' : '#ef4444' }
-                  ]}>
-                    {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)} VNĐ
-                  </Text>
-                  <View style={styles.accountInfo}>
-                    <Text style={styles.accountName}>Cash</Text>
-                    <View style={[
-                      styles.typeIndicator,
-                      { backgroundColor: transaction.type === 'income' ? '#22c55e20' : '#ef444420' }
-                    ]}>
-                      <Ionicons
-                        name={transaction.type === 'income' ? 'arrow-up' : 'arrow-down'}
-                        size={8}
-                        color={transaction.type === 'income' ? '#22c55e' : '#ef4444'}
-                      />
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
+        {/* Calendar Days */}
+        {activeTab === 'daily' && (
+          <ScrollView 
+            ref={scrollViewRef}
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            style={styles.calendarScroll}
+            onContentSizeChange={scrollToSelectedDay}
+          >
+            {weekDays.map((item) => (
+              <TouchableOpacity
+                key={`${item.fullDate.getTime()}`}
+                style={[
+                  styles.dayItem,
+                  selectedDate.getDate() === item.fullDate.getDate() && 
+                  selectedDate.getMonth() === item.fullDate.getMonth() &&
+                  selectedDate.getFullYear() === item.fullDate.getFullYear() &&
+                  styles.selectedDay
+                ]}
+                onPress={() => {
+                  const newDate = new Date(
+                    item.fullDate.getFullYear(),
+                    item.fullDate.getMonth(),
+                    item.fullDate.getDate()
+                  );
+                  newDate.setHours(0, 0, 0, 0);
+                  setSelectedDate(newDate);
+                  fetchTransactions(newDate);
+                }}
+              >
+                <Text style={[
+                  styles.dayText,
+                  selectedDate.getDate() === item.fullDate.getDate() &&
+                  selectedDate.getMonth() === item.fullDate.getMonth() &&
+                  selectedDate.getFullYear() === item.fullDate.getFullYear() &&
+                  styles.selectedDayText
+                ]}>{item.day}</Text>
+                <Text style={[
+                  styles.dateText,
+                  selectedDate.getDate() === item.fullDate.getDate() &&
+                  selectedDate.getMonth() === item.fullDate.getMonth() &&
+                  selectedDate.getFullYear() === item.fullDate.getFullYear() &&
+                  styles.selectedDayText
+                ]}>{item.date}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
       </View>
+
+      {renderContent()}
     </ScrollView>
   );
 };
@@ -582,6 +436,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
+  tabContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: '#1c1c1e',
+    paddingVertical: 8,
+  },
+  tabButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  activeTab: {
+    backgroundColor: '#3d2e9c',
+  },
+  tabText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  activeTabText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
   calendarScroll: {
     paddingHorizontal: 20,
     marginTop: 20,
@@ -595,9 +470,7 @@ const styles = StyleSheet.create({
     width: 60,
     borderWidth: 1,
     borderColor: '#3d2e9c',
-    
   },
-  
   selectedDay: {
     backgroundColor: '#3d2e9c',
   },
@@ -624,7 +497,6 @@ const styles = StyleSheet.create({
     marginTop: -20,
     paddingTop: 20,
     paddingHorizontal: 20,
-    maxHeight: '1000%', // Giới hạn chiều cao của phần transactions
   },
   transactionsHeader: {
     flexDirection: 'row',
@@ -851,6 +723,16 @@ const styles = StyleSheet.create({
   categoryDropdownContainer: {
     position: 'relative',
     zIndex: 1000,
+  },
+  monthlyStatsContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  monthlyStatsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 16,
   },
 });
 
