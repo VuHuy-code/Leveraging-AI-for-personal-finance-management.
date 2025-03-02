@@ -27,8 +27,14 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_MEDIA_LOCATION"
-      ]
+        "android.permission.ACCESS_MEDIA_LOCATION",
+
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "package": "com.thanhquy119.MyApp",
+      "googleServicesFile": "./android/app/google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -60,6 +66,14 @@
         {
           "color": "#ffffff"
         }
+      ],
+      [
+        "expo-background-fetch",
+        {
+          "backgroundFetch": {
+            "minimumInterval": 86400
+          }
+        }
       ]
     ],
     "experiments": {
@@ -70,9 +84,8 @@
         "projectId": "5bef3b3e-b000-4347-b32e-f90b9ce84bcb"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
+    "googleServicesFile": "./android/app/google-services.json",
     "updates": {
       "url": "https://u.expo.dev/5bef3b3e-b000-4347-b32e-f90b9ce84bcb"
     },

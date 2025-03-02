@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { auth } from '../../services/firebase/auth';
 import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getUserProfile, saveUserProfile} from '../../services/firebase/firestore'; // Import Firestore functions
+import { getWallet } from '../../services/firebase/storage'; // Import getWallet function
 
 interface AuthUser extends User {
   displayName: string | null;
@@ -23,7 +24,7 @@ export const useAuth = () => {
         try {
           // Lấy thông tin người dùng từ Firestore
           let data = await getUserProfile(authUser.uid);
-          
+
           // Nếu chưa có dữ liệu, lưu thông tin cơ bản ban đầu
           if (!data && authUser.email) {
             const defaultName = authUser.email; // Đặt tên mặc định là email
@@ -46,6 +47,17 @@ export const useAuth = () => {
     return () => unsubscribe(); // Đảm bảo dừng theo dõi khi component bị hủy
   }, []);
 
+  // Add this function to check if a wallet exists
+  const checkUserWallet = async (userId: string): Promise<boolean> => {
+    try {
+      const userWallet = await getWallet(userId);
+      return !!userWallet; // Returns true if wallet exists, false otherwise
+    } catch (error) {
+      console.error("Error checking wallet:", error);
+      return false;
+    }
+  };
+
   // Hàm đăng nhập
   const login = async (email: string, password: string) => {
     try {
@@ -61,8 +73,8 @@ export const useAuth = () => {
         data = await getUserProfile(userCredential.user.uid);
       }
       setUserData(data);
-      
-      // The navigation will be handled by _layout.tsx through the useEffect
+
+      // Navigation will be handled by _layout.tsx
     } catch (error) {
       console.error('Error logging in:', error);
       throw error;
@@ -80,7 +92,7 @@ export const useAuth = () => {
       await saveUserProfile(userCredential.user.uid, defaultName, defaultAvatarUrl);
       const data = await getUserProfile(userCredential.user.uid);
       setUserData(data);
-      
+
       // The navigation will be handled by _layout.tsx through the useEffect
     } catch (error) {
       console.error('Error registering:', error);

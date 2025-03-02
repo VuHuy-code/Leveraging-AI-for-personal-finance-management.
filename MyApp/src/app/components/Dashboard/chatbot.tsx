@@ -14,7 +14,7 @@ import {
   Modal,
   Image
 } from 'react-native';
-import { Ionicons, EvilIcons } from '@expo/vector-icons';
+import { Ionicons, EvilIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
@@ -47,7 +47,6 @@ interface Expense {
   amount: string;
   title: string;
 }
-
 
 // Add these missing helper functions to filter expenses by date/month:
 async function getExpensesForDate(userId: string, date: Date): Promise<Expense[]> {
@@ -118,7 +117,7 @@ const extractSavingGoalInfo = (text: string) => {
   ];
 
   const text_lower = text.toLowerCase();
-  const matchedGoal = commonGoals.find(goal => 
+  const matchedGoal = commonGoals.find(goal =>
     goal.keywords.some(keyword => text_lower.includes(keyword))
   );
 
@@ -146,13 +145,13 @@ CHI TIÊU:
 - Ăn uống:
 - Y tế: thuốc
 - Mua sắm:sàn thương mại điện tử, có từ mua, những gì liên quan đến mua sắm.
-- Di chuyển: xăng,du lịch,...  
+- Di chuyển: xăng,du lịch,...
 - Hóa đơn:Những từ liên quan đến hóa đơn.
 - Giải trí: phim, game,...
 - Giáo dục: học phí, sách vở
 - Đầu tư: chứng khoán, tiết kiệm,...
 - Khác: chi phí phát sinh
-Output format: 
+Output format:
 **Phân loại: [category], Tiền: [amount] VNĐ, Tiêu đề: [short_title]** sau phần này là thêm lời văn của bạn cho người dùng nếu thấy khoảng chi hợp lí thì sao đó tùy bạn còn nếu thấy không hợp lý thì chửi người dùng cho tôi.
 Với câu hỏi không liên quan tài chính: Trả lời ngắn gọn, thân thiện.`;
 
@@ -169,6 +168,63 @@ interface TranscriptionResponse {
     id: string;
   };
 }
+
+// Add proper type annotations to the FormattedMessage component
+interface FormattedMessageProps {
+  text: string;
+  isUserMessage: boolean;
+}
+
+// Component to format message text properly
+const FormattedMessage: React.FC<FormattedMessageProps> = ({ text, isUserMessage }) => {
+  // Function to process message text and format it properly
+  const formatMessageText = (messageText: string) => {
+    // Check if the message contains the transaction pattern
+    const transactionPattern = /\*\*Phân loại:\s*(.*?),\s*Tiền:\s*([\d,.]+)\s*VNĐ,\s*Tiêu đề:\s*(.*?)\*\*/;
+    const match = messageText.match(transactionPattern);
+
+    if (match) {
+      // Extract transaction details
+      const [fullMatch, category, amount, title] = match;
+      // Get the comment part (everything after the transaction details)
+      const commentPart = messageText.replace(fullMatch, '').trim();
+
+      // Return formatted transaction with proper styling
+      return (
+        <View>
+          <View style={styles.transactionDetails}>
+            <Text style={[styles.transactionText, isUserMessage ? styles.userMessageText : styles.botMessageText]}>
+              <Text style={styles.transactionLabel}>Phân loại:</Text> {category}{'\n'}
+              <Text style={styles.transactionLabel}>Tiền:</Text> {amount} VNĐ{'\n'}
+              <Text style={styles.transactionLabel}>Tiêu đề:</Text> {title}
+            </Text>
+          </View>
+          {commentPart.length > 0 && (
+            <Text style={[
+              styles.messageText,
+              isUserMessage ? styles.userMessageText : styles.botMessageText,
+              styles.commentText
+            ]}>
+              {commentPart}
+            </Text>
+          )}
+        </View>
+      );
+    }
+
+    // For messages without transaction pattern, just return the text
+    return (
+      <Text style={[
+        styles.messageText,
+        isUserMessage ? styles.userMessageText : styles.botMessageText
+      ]}>
+        {messageText}
+      </Text>
+    );
+  };
+
+  return formatMessageText(text);
+};
 
 const Chatbot: React.FC = () => {
   const router = useRouter();
@@ -324,7 +380,7 @@ const Chatbot: React.FC = () => {
 
     if (isSavingRequest(transcribedText)) {
       const savingInfo = extractSavingGoalInfo(transcribedText);
-      
+
       if (savingInfo.goal <= 0) {
         const askAmountMessage: Message = {
           id: Date.now().toString(),
@@ -335,11 +391,11 @@ const Chatbot: React.FC = () => {
         setMessages([...messages, askAmountMessage]);
         return;
       }
-  
+
       try {
         // Lấy danh sách mục tiêu hiện tại
         const currentGoals = await getSavingGoals(user.uid);
-        
+
         // Tạo mục tiêu mới
         const newGoal: SavingGoal = {
           id: Date.now().toString(),
@@ -349,10 +405,10 @@ const Chatbot: React.FC = () => {
           createdAt: new Date().toISOString(),
           targetDate: savingInfo.targetDate
         };
-  
+
         // Thêm mục tiêu mới vào danh sách
         await saveSavingGoals(user.uid, [...currentGoals, newGoal]);
-  
+
         // Phản hồi cho người dùng
         const confirmMessage: Message = {
           id: Date.now().toString(),
@@ -360,12 +416,12 @@ const Chatbot: React.FC = () => {
   - Tên: ${savingInfo.name}
   - Mục tiêu: ${savingInfo.goal.toLocaleString('vi-VN')} VNĐ
   - Thời hạn: 6 tháng
-  
+
   Chúc bạn sớm đạt được mục tiêu! 💪`,
           isUser: false,
           timestamp: new Date(),
         };
-  
+
         setMessages([...messages, confirmMessage]);
         return;
       } catch (error) {
@@ -380,12 +436,12 @@ const Chatbot: React.FC = () => {
         return;
       }
     }
-  
+
     // Nếu đang chờ input giá tiền
     if (awaitingPriceInput && tempProductInfo) {
       // Xử lý text để lấy số tiền
       const amount = transcribedText.replace(/[^0-9]/g, '');
-      
+
       if (amount) {
         try {
           await saveExpenseToCSV(user.uid, {
@@ -396,38 +452,38 @@ const Chatbot: React.FC = () => {
             timestamp: new Date().toISOString()
           });
           refreshTransactions();
-          
+
           const confirmMessage: Message = {
             id: Date.now().toString(),
             text: `**Phân loại: ${tempProductInfo.category}, Tiền: ${amount} VNĐ, Tiêu đề: ${tempProductInfo.type}** Đã ghi nhận khoản chi của bạn.`,
             isUser: false,
             timestamp: new Date(),
           };
-  
+
           const updatedMessages = [...messages, confirmMessage];
           setMessages(updatedMessages);
           await updateChatHistory(user.uid, updatedMessages);
-  
+
         } catch (error) {
           console.error('Error saving expense:', error);
           Alert.alert('Error', 'Không thể lưu chi tiêu. Vui lòng thử lại.');
         }
-  
+
         // Reset states
         setAwaitingPriceInput(false);
         setTempProductInfo(null);
         return;
       }
     }
-    
+
     const handleUserQuestion = async (question: string) => {
       const timeRange = analyzeTimeRange(question);
       let expenses: Expense[] = [];
-      const isSummaryRequest = question.toLowerCase().includes('tổng') || 
+      const isSummaryRequest = question.toLowerCase().includes('tổng') ||
                               question.toLowerCase().includes('bao nhiêu') ||
                               question.toLowerCase().includes('chi tiêu') ||
                               timeRange.type !== 'none';
-  
+
       try {
         // Nếu là câu hỏi tổng hợp/thống kê
         if (isSummaryRequest) {
@@ -466,30 +522,30 @@ const Chatbot: React.FC = () => {
         return { expenses: [], isSummaryRequest };
       }
     };
-  
+
     const userMessage: Message = {
       id: Date.now().toString(),
       text: transcribedText.trim(),
       isUser: true,
       timestamp: new Date(),
     };
-    
+
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setIsLoading(true);
-  
+
     try {
       // Lấy 2 tin nhắn gần nhất để có context
       const recentMessages = await getRecentMessages(user.uid, 2);
       const { expenses, isSummaryRequest } = await handleUserQuestion(transcribedText);
-  
+
       // Tạo prompt khác nhau cho câu hỏi thông thường và câu hỏi tổng hợp
       let systemPromptWithData;
       if (isSummaryRequest) {
         systemPromptWithData = `
         Bạn có quyền truy cập vào dữ liệu chi tiêu (ở dạng JSON):
         ${JSON.stringify(expenses, null, 2)}
-  
+
         Hãy phân tích và tổng hợp chi tiêu một cách trực quan, dễ hiểu.
         Với câu hỏi tổng hợp/thống kê, hỏi đắt hay rẻ KHÔNG sử dụng format ** ** mà hãy trình bày theo dạng:
         - Tổng thu: xxx
@@ -503,14 +559,14 @@ const Chatbot: React.FC = () => {
         systemPromptWithData = `
         Bạn có quyền truy cập vào dữ liệu chi tiêu hôm nay (ở dạng JSON):
         ${JSON.stringify(expenses, null, 2)}
-  
+
         Tin nhắn gần nhất:
         ${recentMessages.map(msg => `${msg.isUser ? 'User' : 'Bot'}: ${msg.text}`).join('\n')}
-  
+
         ${baseSystemPrompt}
         `;
       }
-  
+
       const completion = await groq.chat.completions.create({
         messages: [
           { role: 'system', content: systemPromptWithData },
@@ -520,16 +576,16 @@ const Chatbot: React.FC = () => {
         temperature: 0.5,
         max_tokens: 1024,
       });
-  
+
       const responseText = completion.choices[0]?.message?.content || "";
       console.log("Bot response:", responseText);
-  
+
       // Chỉ xử lý lưu chi tiêu mới nếu không phải câu hỏi tổng hợp
       if (!isSummaryRequest) {
         const match = responseText.match(
           /\*\*Phân loại:\s*(.*?),\s*Tiền:\s*([\d,.]+)\s*VNĐ,\s*Tiêu đề:\s*(.*?)\*\*/
         );
-  
+
         if (match) {
           const [_, category, amount, title] = match;
           try {
@@ -548,18 +604,18 @@ const Chatbot: React.FC = () => {
           }
         }
       }
-  
+
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: responseText,
         isUser: false,
         timestamp: new Date(),
       };
-      
+
       const finalMessages = [...updatedMessages, botResponse];
       setMessages(finalMessages);
       await updateChatHistory(user.uid, finalMessages);
-  
+
     } catch (error) {
       console.error('Chat error:', error);
       const errorMessage: Message = {
@@ -575,7 +631,7 @@ const Chatbot: React.FC = () => {
       setIsLoading(false);
     }
   };
-  
+
   // Hàm phụ trợ để xác định loại giao dịch
   const determineTransactionType = (
     message: string,
@@ -583,19 +639,19 @@ const Chatbot: React.FC = () => {
   ): 'income' | 'expense' => {
     const incomeCategories = ['Lương tháng', 'Tiết kiệm', 'Khác'];
     const incomeKeywords = ['nhận', 'được', 'cho', 'tặng', 'thưởng'];
-    
+
     return incomeCategories.includes(category) ||
       incomeKeywords.some(keyword => message.toLowerCase().includes(keyword))
       ? 'income'
       : 'expense';
   };
-  
+
 const handlePressIn = async () => {
   // Don't allow starting another recording if one is already in progress
   if (isRecording || isInitializingRecording) return;
-  
+
   setIsInitializingRecording(true);
-  
+
   try {
     // Clean up any existing recording first
     if (recordingRef.current) {
@@ -621,12 +677,12 @@ const handlePressIn = async () => {
     const { recording } = await Audio.Recording.createAsync(
       Audio.RecordingOptionsPresets.HIGH_QUALITY
     );
-    
+
     recordingRef.current = recording;
     setIsRecording(true);
   } catch (error) {
     console.log('Failed to start recording:', error);
-    
+
     // Make sure we clean up properly
     if (recordingRef.current) {
       try {
@@ -647,10 +703,10 @@ const handlePressOut = async () => {
     setIsRecording(false);
     return;
   }
-  
+
   // Update UI state immediately for responsive feedback
   setIsRecording(false);
-  
+
   try {
     if (!recordingRef.current) {
       return; // Nothing to stop
@@ -665,7 +721,7 @@ const handlePressOut = async () => {
       recordingRef.current = null;
       return;
     }
-    
+
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
       playsInSilentModeIOS: false,
@@ -723,7 +779,6 @@ const handlePressOut = async () => {
     recordingRef.current = null;
   }
 };
-
 const captureOrPickImage = async () => {
   Alert.alert(
     'Chụp hóa đơn',
@@ -833,7 +888,7 @@ const processImage = async (imageUri: string) => {
       isUser: false,
       timestamp: new Date(),
     };
-    
+
     const messagesWithProcessing = [...messages, processingMessage];
     setMessages(messagesWithProcessing);
 
@@ -846,7 +901,7 @@ const processImage = async (imageUri: string) => {
             {
               type: "text",
               text: `Phân tích ảnh này. Nếu đây là hóa đơn hoặc biên lai, hãy trả về thông tin dưới dạng JSON theo format sau:
-             
+
 {
   "total": "tổng tiền (chỉ số, không có đơn vị)",
   "items": [
@@ -882,37 +937,37 @@ Lưu ý: Đảm bảo tổng tiền và số tiền từng món chỉ chứa cá
       temperature: 0.1, // Giảm temperature để kết quả nhất quán hơn
       max_tokens: 1500,
     });
-  
+
     console.log('Phản hồi gốc:', billAnalysis.choices[0]?.message?.content);
-  
+
     const response = billAnalysis.choices[0]?.message?.content;
     if (!response) {
       throw new Error('Không nhận được phản hồi từ AI');
     }
-    
+
     // Loại bỏ tin nhắn "đang xử lý"
     setMessages(messages);
-    
+
     // Tìm và trích xuất phần JSON từ phản hồi
     let jsonContent = response;
     const jsonMatch = response.match(/(\{[\s\S]*\})/);
     if (jsonMatch) {
       jsonContent = jsonMatch[1];
     }
-    
+
     try {
       // Thử phân tích JSON
       const parsedResponse: BillResponse = JSON.parse(jsonContent);
-      
+
       if (parsedResponse.error === "NOT_BILL") {
         // Kiểm tra xem phản hồi có chứa thông tin về tổng tiền không
         const amountMatch = response.match(/(\d[\d.,\s]+)(?:\s*)(đồng|vnd|vnđ|₫)/i);
         const estimatedAmount = amountMatch ? amountMatch[1].replace(/[^\d]/g, '') : '';
-        
+
         if (estimatedAmount && parseInt(estimatedAmount) > 0) {
           // Nếu tìm thấy tổng tiền, tạo một giao dịch đơn giản
           const reason = parsedResponse.reason || "Không nhận diện được chi tiết hóa đơn";
-          
+
           // Hiển thị thông báo và tùy chọn lưu đơn giản
           Alert.alert(
             'Không nhận diện đầy đủ chi tiết hóa đơn',
@@ -933,10 +988,10 @@ Lưu ý: Đảm bảo tổng tiền và số tiền từng món chỉ chứa cá
                     type: 'expense',
                     timestamp: new Date().toISOString()
                   };
-                  
+
                   await saveExpenseToCSV(user.uid, simpleExpense);
                   refreshTransactions();
-                  
+
                   const simpleBillSummary = `🧾 Đã lưu hóa đơn đơn giản:
 
 💰 Tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ
@@ -944,14 +999,14 @@ Lưu ý: Đảm bảo tổng tiền và số tiền từng món chỉ chứa cá
 📁 Phân loại: Ăn uống
 
 ⚠️ Hệ thống không thể xác định đầy đủ chi tiết từ hóa đơn này.`;
-                  
+
                   const simpleResponse: Message = {
                     id: Date.now().toString(),
                     text: simpleBillSummary,
                     isUser: false,
                     timestamp: new Date(),
                   };
-                  
+
                   const updatedMessages = [...messages, simpleResponse];
                   setMessages(updatedMessages);
                   await updateChatHistory(user.uid, updatedMessages);
@@ -959,7 +1014,7 @@ Lưu ý: Đảm bảo tổng tiền và số tiền từng món chỉ chứa cá
               }
             ]
           );
-          
+
           const infoResponse: Message = {
             id: Date.now().toString(),
             text: `ℹ️ Phát hiện hóa đơn có tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ
@@ -970,7 +1025,7 @@ Vui lòng chọn lưu hoặc hủy khoản chi này.`,
             isUser: false,
             timestamp: new Date(),
           };
-          
+
           const updatedMessages = [...messages, infoResponse];
           setMessages(updatedMessages);
           await updateChatHistory(user.uid, updatedMessages);
@@ -978,7 +1033,7 @@ Vui lòng chọn lưu hoặc hủy khoản chi này.`,
         } else {
           // Xử lý trường hợp không phải hóa đơn
           const reason = parsedResponse.reason || "Không nhận diện được định dạng hóa đơn";
-          
+
           // Hiển thị thông báo và tùy chọn nhập thủ công
           Alert.alert(
             'Không nhận diện được hóa đơn',
@@ -998,64 +1053,64 @@ Vui lòng chọn lưu hoặc hủy khoản chi này.`,
                     isUser: false,
                     timestamp: new Date(),
                   };
-                  
+
                   setMessages([...messages, helpMessage]);
                   updateChatHistory(user.uid, [...messages, helpMessage]);
                 }
               }
             ]
           );
-          
+
           const errorResponse: Message = {
             id: Date.now().toString(),
             text: `Ảnh này không được nhận diện là hóa đơn.\n\nLý do: ${reason}\n\nVui lòng thử lại với ảnh khác hoặc chụp lại hóa đơn rõ nét hơn.`,
             isUser: false,
             timestamp: new Date(),
           };
-          
+
           const updatedMessages = [...messages, errorResponse];
           setMessages(updatedMessages);
           await updateChatHistory(user.uid, updatedMessages);
           return;
         }
       }
-      
+
       // Xử lý dữ liệu JSON khi nhận diện thành công
       let totalAmount = parsedResponse.total;
       // Đảm bảo tổng tiền chỉ chứa số
       totalAmount = totalAmount.toString().replace(/[^\d]/g, '');
-      
+
       if (!totalAmount || totalAmount === '0') {
         throw new Error('Không thể xác định tổng tiền từ hóa đơn');
       }
-      
+
       const items = parsedResponse.items || [];
       const commentSection = parsedResponse.comment || 'Không có nhận xét';
-      
+
       // Chuẩn hóa dữ liệu các mục
       const normalizedItems: BillItem[] = items.map((item: BillItem) => ({
         category: item.category || 'Khác',
         amount: item.amount.toString().replace(/[^\d]/g, '') || '0',
         title: item.title || 'Không có tiêu đề'
       }));
-      
+
       // Loại bỏ các mục trùng lặp
       const uniqueItems: BillItem[] = [];
       const processedItems = new Set<string>();
-      
+
       for (const item of normalizedItems) {
         // Bỏ qua các mục có số tiền là 0
         if (item.amount === '0') continue;
-        
+
         const itemKey = `${item.category}|${item.amount}|${item.title}`;
         if (!processedItems.has(itemKey)) {
           processedItems.add(itemKey);
           uniqueItems.push(item);
         }
       }
-      
+
       console.log(`Tìm thấy ${uniqueItems.length} mục hợp lệ trong hóa đơn`);
-      
+
       // Nếu không có mục nào được tìm thấy, tạo một mục mặc định
       if (uniqueItems.length === 0) {
         uniqueItems.push({
@@ -1064,13 +1119,13 @@ Vui lòng chọn lưu hoặc hủy khoản chi này.`,
           title: 'Chi tiêu tổng hợp'
         });
       }
-      
+
       // Xác định danh mục chung cho hóa đơn
       const categoryCounts: {[key: string]: number} = {};
       uniqueItems.forEach(item => {
         categoryCounts[item.category] = (categoryCounts[item.category] || 0) + 1;
       });
-      
+
       // Lấy danh mục xuất hiện nhiều nhất
       let mainCategory = uniqueItems[0].category;
       let maxCount = 0;
@@ -1080,7 +1135,7 @@ Vui lòng chọn lưu hoặc hủy khoản chi này.`,
           mainCategory = category;
         }
       });
-      
+
       // Tạo tiêu đề cho hóa đơn
       let billTitle = '';
       if (uniqueItems.length === 1) {
@@ -1091,10 +1146,10 @@ Vui lòng chọn lưu hoặc hủy khoản chi này.`,
         // Nếu có nhiều hơn 3 món, lấy 2 món đầu tiên và ghi "và x món khác"
         billTitle = `${uniqueItems[0].title}, ${uniqueItems[1].title} và ${uniqueItems.length - 2} món khác`;
       }
-      
+
       // Thêm tiền tố "Hóa đơn" vào tiêu đề
       billTitle = `Hóa đơn - ${billTitle}`;
-      
+
       // Lưu giao dịch vào CSV
       const expenseData: ExpenseData = {
         category: mainCategory,
@@ -1103,17 +1158,17 @@ Vui lòng chọn lưu hoặc hủy khoản chi này.`,
         type: 'expense',
         timestamp: new Date().toISOString()
       };
-      
+
       console.log('Lưu hóa đơn:', expenseData);
-      
+
       await saveExpenseToCSV(user.uid, expenseData);
       refreshTransactions();
-      
+
       // Hiển thị chi tiết các món cho người dùng
-      const itemDetails = uniqueItems.map(item => 
+      const itemDetails = uniqueItems.map(item =>
         `🛍️ ${item.title}: ${parseInt(item.amount).toLocaleString('vi-VN')} VNĐ (${item.category})`
       );
-      
+
       const billSummary = `🧾 Đã lưu hóa đơn:
 
 💰 Tổng tiền: ${parseInt(totalAmount).toLocaleString('vi-VN')} VNĐ
@@ -1124,27 +1179,27 @@ Vui lòng chọn lưu hoặc hủy khoản chi này.`,
 ${itemDetails.join('\n')}
 
 💭 Nhận xét: ${commentSection}`;
-      
+
       const botResponse: Message = {
         id: Date.now().toString(),
         text: billSummary,
         isUser: false,
         timestamp: new Date(),
       };
-      
+
       const updatedMessages = [...messages, botResponse];
       setMessages(updatedMessages);
       await updateChatHistory(user.uid, updatedMessages);
-      
+
     } catch (jsonError) {
       console.error('Lỗi xử lý JSON:', jsonError);
-      
+
       // Thử phương pháp đơn giản hơn - tìm số tiền trực tiếp từ phản hồi
       try {
         // Tìm số tiền từ phản hồi
         const amountMatch = response.match(/(\d[\d\s,.]+)\s*(đồng|vnd|vnđ|₫)/i);
         const estimatedAmount = amountMatch ? amountMatch[1].replace(/[^\d]/g, '') : '';
-        
+
         if (estimatedAmount && parseInt(estimatedAmount) > 0) {
           // Hiển thị thông báo và tùy chọn lưu đơn giản
           Alert.alert(
@@ -1166,10 +1221,10 @@ ${itemDetails.join('\n')}
                     type: 'expense',
                     timestamp: new Date().toISOString()
                   };
-                  
+
                   await saveExpenseToCSV(user.uid, simpleExpense);
                   refreshTransactions();
-                  
+
                   const simpleBillSummary = `🧾 Đã lưu hóa đơn đơn giản:
 
 💰 Tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ
@@ -1177,14 +1232,14 @@ ${itemDetails.join('\n')}
 📁 Phân loại: Ăn uống
 
 ⚠️ Hệ thống không thể xác định đầy đủ chi tiết từ hóa đơn này.`;
-                  
-                  const simpleResponse: Message = {   
+
+                  const simpleResponse: Message = {
                     id: Date.now().toString(),
                     text: simpleBillSummary,
                     isUser: false,
                     timestamp: new Date(),
                   };
-                  
+
                   const updatedMessages = [...messages, simpleResponse];
                   setMessages(updatedMessages);
                   await updateChatHistory(user.uid, updatedMessages);
@@ -1192,7 +1247,7 @@ ${itemDetails.join('\n')}
               }
             ]
           );
-          
+
           const infoResponse: Message = {
             id: Date.now().toString(),
             text: `ℹ️ Phát hiện hóa đơn có tổng tiền: ${parseInt(estimatedAmount).toLocaleString('vi-VN')} VNĐ
@@ -1201,13 +1256,13 @@ Tuy nhiên, không thể nhận diện đầy đủ chi tiết. Vui lòng chọn
             isUser: false,
             timestamp: new Date(),
           };
-          
+
           const updatedMessages = [...messages, infoResponse];
           setMessages(updatedMessages);
           await updateChatHistory(user.uid, updatedMessages);
           return;
         }
-        
+
         // Nếu không tìm thấy số tiền, hiển thị lỗi
         throw new Error('Không thể xác định thông tin từ hóa đơn');
       } catch (fallbackError) {
@@ -1215,7 +1270,7 @@ Tuy nhiên, không thể nhận diện đầy đủ chi tiết. Vui lòng chọn
         const errorResponse: Message = {
           id: Date.now().toString(),
           text: `❌ Lỗi xử lý hóa đơn: ${fallbackError instanceof Error ? fallbackError.message : 'Lỗi không xác định'}
-          
+
 🔍 Vui lòng thử lại với một trong các cách sau:
 1. Chụp lại hóa đơn rõ ràng hơn
 2. Đảm bảo hóa đơn nằm hoàn toàn trong khung hình
@@ -1224,7 +1279,7 @@ Tuy nhiên, không thể nhận diện đầy đủ chi tiết. Vui lòng chọn
           isUser: false,
           timestamp: new Date(),
         };
-        
+
         const updatedMessages = [...messages, errorResponse];
         setMessages(updatedMessages);
         await updateChatHistory(user.uid, updatedMessages);
@@ -1233,11 +1288,11 @@ Tuy nhiên, không thể nhận diện đầy đủ chi tiết. Vui lòng chọn
 
   } catch (error) {
     console.error('Lỗi xử lý ảnh:', error);
-    
+
     const errorResponse: Message = {
       id: Date.now().toString(),
       text: `❌ Không thể xử lý ảnh: ${error instanceof Error ? error.message : 'Lỗi không xác định'}
-      
+
 Vui lòng thử lại sau hoặc nhập thông tin chi tiêu thủ công bằng cách nói "Tôi đã chi [số tiền] cho [mục đích]"`,
       isUser: false,
       timestamp: new Date(),
@@ -1250,138 +1305,179 @@ Vui lòng thử lại sau hoặc nhập thông tin chi tiêu thủ công bằng 
     setIsLoading(false);
   }
 };
-      
-      const renderVisualizer = () => {
-    if (!isRecording) return null;
 
-    return (
-      <View style={styles.visualizerWrapper}>
-        <View style={styles.recordingTimerContainer}>
-          <Text style={styles.recordingTimer}>
-            {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
-          </Text>
-        </View>
-        <View style={styles.visualizerContainer}>
-          {waveData.map((value, index) => (
-            <Animated.View
-              key={index}
-              style={[
-                styles.visualizerBar,
-                {
-                  height: 25 * value,
-                  backgroundColor: `rgba(255,255,255,${0.5 + (index / waveData.length) * 0.5})`,
-                  transform: [{ scaleY: value }],
-                }
-              ]}
-            />
-          ))}
-        </View>
-      </View>
-    );
-  };
-
-  useEffect(() => {
-    if (!isRecording) {
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current);
-        animationFrameId.current = undefined;
-      }
-      setWaveData(Array(15).fill(1));
-      setRecordingDuration(0);
-    }
-  }, [isRecording]);
-
-  if (isLoadingHistory) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#eef4f0" />
-        <Text style={styles.loadingText}>Đang tải lịch sử chat...</Text>
-      </View>
-    );
-  }
+const renderVisualizer = () => {
+  if (!isRecording) return null;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ImageBackground
-        source={require('../../../assets/images/bbgg.png')}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <TouchableOpacity 
-          onPress={() => router.back()} 
-          style={styles.backButton}
-        >
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </TouchableOpacity>
-
-        <View style={styles.titleContainer}>
-          <Text style={styles.headerTitle}>Chatbot</Text>
-        </View>
-
-        <View style={styles.chatContainer}>
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View
-                style={[
-                  styles.messageContainer,
-                  item.isUser ? styles.userMessage : styles.botMessage
-                ]}
-              >
-                <Text style={styles.messageText}>{item.text}</Text>
-              </View>
-            )}
-            style={styles.messagesList}
-            contentContainerStyle={{ 
-              paddingBottom: 16,
-              flexGrow: 1,
-            }}
-            onContentSizeChange={() => {
-              flatListRef.current?.scrollToEnd();
-            }}
+    <View style={styles.visualizerWrapper}>
+      <View style={styles.recordingTimerContainer}>
+        <Text style={styles.recordingTimer}>
+          {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
+        </Text>
+      </View>
+      <View style={styles.visualizerContainer}>
+        {waveData.map((value, index) => (
+          <Animated.View
+            key={index}
+            style={[
+              styles.visualizerBar,
+              {
+                height: 25 * value,
+                backgroundColor: `rgba(255,255,255,${0.5 + (index / waveData.length) * 0.5})`,
+                transform: [{ scaleY: value }],
+              }
+            ]}
           />
-        </View>
+        ))}
+      </View>
+    </View>
+  );
+};
 
-        <View style={styles.bottomSheetContainer}>
-          <View style={styles.bottomBox}>
-            {isRecording && renderVisualizer()}
-            <View style={styles.actionContainer}>
-              <TouchableOpacity onPress={captureOrPickImage} style={styles.iconButton}>
-                <EvilIcons name="camera" size={24} color="#fff" />
-              </TouchableOpacity>
+useEffect(() => {
+  if (!isRecording) {
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
+      animationFrameId.current = undefined;
+    }
+    setWaveData(Array(15).fill(1));
+    setRecordingDuration(0);
+  }
+}, [isRecording]);
 
-              <View style={styles.micButtonContainer}>
-                <TouchableOpacity
-                  onPressIn={handlePressIn}
-                  onPressOut={handlePressOut}
-                  style={[
-                    styles.micButton,
-                    isRecording && styles.micButtonHoldRecording
-                  ]}
-                >
-                  <Ionicons
-                    name={isRecording ? "mic" : "mic-outline"}
-                    size={32}
-                    color="#fff"
-                  />
-                </TouchableOpacity>
-                <Text style={styles.holdToRecordText}>Giữ để ghi âm</Text>
+if (isLoadingHistory) {
+  return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#eef4f0" />
+      <Text style={styles.loadingText}>Đang tải lịch sử chat...</Text>
+    </View>
+  );
+}
+
+return (
+  <KeyboardAvoidingView
+    style={styles.container}
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  >
+    <ImageBackground
+      source={require('../../../assets/images/bbgg.png')}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <TouchableOpacity
+        onPress={() => router.back()}
+        style={styles.backButton}
+      >
+        <Ionicons name="chevron-back" size={24} color="#fff" />
+      </TouchableOpacity>
+
+      <View style={styles.titleContainer}>
+        <Text style={styles.headerTitle}>Chatbot</Text>
+      </View>
+
+      <View style={styles.chatContainer}>
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View
+              style={[
+                styles.messageContainer,
+                item.isUser ? styles.userMessage : styles.botMessage
+              ]}
+            >
+              {!item.isUser && (
+                <View style={styles.botAvatarContainer}>
+                </View>
+              )}
+              <View style={[
+                styles.messageBubble,
+                item.isUser ? styles.userBubble : styles.botBubble
+              ]}>
+                <FormattedMessage
+                  text={item.text}
+                  isUserMessage={item.isUser}
+                />
+                <Text style={styles.messageTime}>
+                  {new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </Text>
               </View>
-
-              <TouchableOpacity style={styles.iconButton}>
-                <EvilIcons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
             </View>
+          )}
+          style={styles.messagesList}
+          contentContainerStyle={{
+            paddingBottom: 16,
+            flexGrow: 1,
+          }}
+          onContentSizeChange={() => {
+            flatListRef.current?.scrollToEnd({animated: true});
+          }}
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
+
+      <View style={styles.bottomSheetContainer}>
+        <View style={styles.bottomBox}>
+          {isRecording && renderVisualizer()}
+          <View style={styles.actionContainer}>
+            <TouchableOpacity onPress={captureOrPickImage} style={styles.iconButton}>
+              <EvilIcons name="camera" size={28} color="#fff" />
+            </TouchableOpacity>
+
+            <View style={styles.micButtonContainer}>
+              <TouchableOpacity
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                style={[
+                  styles.micButton,
+                  isRecording && styles.micButtonHoldRecording
+                ]}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={isRecording ? "mic" : "mic-outline"}
+                  size={32}
+                  color="#fff"
+                />
+                {isRecording && (
+                  <View style={styles.recordingIndicator}>
+                    <View style={styles.recordingDot} />
+                  </View>
+                )}
+              </TouchableOpacity>
+              <Text style={styles.holdToRecordText}>
+                {isRecording ? "Đang ghi âm..." : "Giữ để ghi âm"}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => {
+                // Show help modal or display help message
+                const helpMessage: Message = {
+                  id: Date.now().toString(),
+                  text: "Hướng dẫn sử dụng:\n\n• Giữ nút micro để ghi âm câu hỏi hoặc ghi nhận chi tiêu\n• Chụp ảnh hóa đơn để tự động nhận diện chi tiêu\n• Hỏi về chi tiêu trong ngày, tháng, quý hoặc năm\n",
+                  isUser: false,
+                  timestamp: new Date(),
+                };
+
+                setMessages([...messages, helpMessage]);
+                if (user) {
+                  updateChatHistory(user.uid, [...messages, helpMessage]);
+                }
+                flatListRef.current?.scrollToEnd({animated: true});
+              }}
+            >
+              <EvilIcons name="question" size={28} color="#fff" />
+            </TouchableOpacity>
           </View>
         </View>
-      </ImageBackground>
-    </KeyboardAvoidingView>
-  );
+      </View>
+    </ImageBackground>
+  </KeyboardAvoidingView>
+);
 };
 
 const styles = StyleSheet.create({
@@ -1420,32 +1516,95 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   messagesList: {
-    flex: 1
+    flex: 1,
   },
   messageContainer: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
-    marginVertical: 4
+    flexDirection: 'row',
+    marginVertical: 8,
+    maxWidth: '90%',
   },
   userMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#1d1c55'
+    justifyContent: 'flex-end',
   },
   botMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#0e0b27'
+    justifyContent: 'flex-start',
+  },
+  botAvatarContainer: {
+    marginRight: 8,
+    alignSelf: 'flex-end',
+  },
+  botAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1d1c55',
+  },
+  messageBubble: {
+    padding: 12,
+    borderRadius: 18,
+    maxWidth: '80%',
+  },
+  userBubble: {
+    backgroundColor: '#1d1c55',
+    borderTopRightRadius: 4,
+  },
+  botBubble: {
+    backgroundColor: '#0e0b27',
+    borderTopLeftRadius: 4,
   },
   messageText: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  userMessageText: {
     color: '#fff',
-    fontSize: 16
+  },
+  botMessageText: {
+    color: '#fff',
+  },
+  messageTime: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.5)',
+    alignSelf: 'flex-end',
+    marginTop: 4,
+  },
+  transactionDetails: {
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 8,
+  },
+  transactionText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  transactionLabel: {
+    fontWeight: '600',
+  },
+  commentText: {
+    marginTop: 4,
+  },
+  bottomSheetContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
   },
   bottomBox: {
-    backgroundColor: '#121217',
-    borderRadius: 20,
+    backgroundColor: 'rgba(18, 18, 23, 0.95)',
+    borderRadius: 24,
     paddingVertical: 16,
     paddingHorizontal: 8,
     marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   actionContainer: {
     flexDirection: 'row',
@@ -1457,20 +1616,55 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   micButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#000001',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#1d1c55',
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   micButtonHoldRecording: {
-    backgroundColor: '#ff4757', // Red for hold mode
+    backgroundColor: '#ff4757',
+  },
+  recordingIndicator: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  micButtonContainer: {
+    alignItems: 'center',
+  },
+  holdToRecordText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    marginTop: 6,
+    fontWeight: '500',
   },
   visualizerWrapper: {
     flexDirection: 'row',
@@ -1479,6 +1673,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 16,
     height: 60,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 16,
+    marginHorizontal: 8,
   },
   visualizerContainer: {
     flex: 1,
@@ -1503,7 +1700,7 @@ const styles = StyleSheet.create({
   recordingTimer: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
@@ -1515,22 +1712,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 16,
     color: '#fff'
-  },
-  bottomSheetContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    paddingBottom: 8,
-  },
-  micButtonContainer: {
-    alignItems: 'center',
-  },
-  holdToRecordText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
-    marginTop: 4,
   },
 });
 

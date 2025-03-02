@@ -7,6 +7,9 @@ import { useRouter } from 'expo-router';
 import { useAuth } from './hooks/useAuth';
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, scheduleNotifications } from '../services/notifications/notificationService';
+import { SavingsProvider } from './contexts/SavingsContext';
+// Import getWallet
+import { getWallet } from '../services/firebase/storage';
 
 // Cấu hình notifications
 Notifications.setNotificationHandler({
@@ -22,19 +25,34 @@ export default function RootLayout() {
   const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (!loading) {
-      if (user) {
-        // If user is authenticated, redirect to dashboard
-        router.replace('/components/Dashboard/dashboard');
+    const checkUserSetup = async () => {
+      if (!loading && user) {
+        try {
+          // Check if user has a wallet
+          const userWallet = await getWallet(user.uid);
+
+          if (userWallet) {
+            // If wallet exists, go to dashboard
+            router.replace('/components/Dashboard/dashboard');
+          } else {
+            // If no wallet, go to setup wallet screen
+            router.replace('./components/Dashboard/SetupWallet');
+          }
+        } catch (error) {
+          console.error("Error checking user setup:", error);
+          // In case of error, default to setup wallet
+          router.replace('./components/Dashboard/SetupWallet');
+        }
       }
-      // If no user, stay on index page (onboarding)
-    }
+    };
+
+    checkUserSetup();
   }, [user, loading]);
 
   useEffect(() => {
     // Đăng ký permissions khi app khởi động
     registerForPushNotificationsAsync();
-    
+
     // Lên lịch notifications
     scheduleNotifications();
   }, []);
@@ -43,33 +61,36 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <WalletProvider>
         <TransactionProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: 'slide_from_right'
-            }}
-          >
-            <Stack.Screen 
-              name="index" 
-              options={{
-                animation: 'fade'
+          <SavingsProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right'
               }}
-            />
-            <Stack.Screen name="components/Auth/login" />
-            <Stack.Screen name="components/Auth/register" />
-            <Stack.Screen 
-              name="components/Dashboard/dashboard"
-              options={{
-                gestureEnabled: false
-              }}
-            />
-            <Stack.Screen 
-              name="components/Dashboard/chatbot"
-              options={{
-                gestureEnabled: false
-              }}
-            />
-          </Stack>
+            >
+              <Stack.Screen
+                name="index"
+                options={{
+                  animation: 'fade'
+                }}
+              />
+              <Stack.Screen name="components/Auth/login" />
+              <Stack.Screen name="components/Auth/register" />
+              <Stack.Screen name="components/Dashboard/SetupWallet" />
+              <Stack.Screen
+                name="components/Dashboard/dashboard"
+                options={{
+                  gestureEnabled: false
+                }}
+              />
+              <Stack.Screen
+                name="components/Dashboard/chatbot"
+                options={{
+                  gestureEnabled: false
+                }}
+              />
+            </Stack>
+          </SavingsProvider>
         </TransactionProvider>
       </WalletProvider>
     </GestureHandlerRootView>

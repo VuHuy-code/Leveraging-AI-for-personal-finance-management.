@@ -16,6 +16,7 @@ export interface Wallet {
 interface WalletContextType {
   wallet: Wallet | null;
   loadWallet: () => Promise<void>;
+  refreshWallet: () => Promise<void>; // Add this
   createWallet: (name: string, initialBalance: number) => Promise<void>;
   deleteWallet: () => Promise<void>;
   updateWallet: (updates: Partial<Wallet>) => Promise<void>;
@@ -74,15 +75,25 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
    */
   const deleteWallet = async () => {
     if (!user) return;
-  
+
     try {
-      await saveWallet(user.uid, null); // ✅ Hợp lệ sau khi sửa `saveWallet`
+      // First set wallet to null in state to ensure immediate UI update
       setWallet(null);
+
+      // Then update Firebase
+      await saveWallet(user.uid, null);
+
+      // Add any additional cleanup needed
+      console.log('Wallet deleted successfully');
     } catch (error) {
       console.error('Error deleting wallet:', error);
+
+      // If there's an error, we should try to reload the wallet to ensure state consistency
+      await loadWallet();
+      throw error; // Re-throw to allow handling in component
     }
   };
-  
+
 
   /**
    * ✏️ Cập nhật ví (Cập nhật số dư, tên,...)
@@ -100,12 +111,24 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  // Add this refreshWallet method (or rename loadWallet to refreshWallet)
+  const refreshWallet = async () => {
+    await loadWallet();
+  };
+
   useEffect(() => {
     loadWallet();
   }, [user]);
 
   return (
-    <WalletContext.Provider value={{ wallet, loadWallet, createWallet, deleteWallet, updateWallet }}>
+    <WalletContext.Provider value={{
+      wallet,
+      loadWallet,
+      refreshWallet,
+      createWallet,
+      deleteWallet,
+      updateWallet
+    }}>
       {children}
     </WalletContext.Provider>
   );

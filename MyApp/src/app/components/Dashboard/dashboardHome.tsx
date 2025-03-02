@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView, Platform, Animated, Easing } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { getUserTransactions } from '../../../services/firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
@@ -11,8 +11,8 @@ import {
   updateWallet,
 } from '../../../services/firebase/storage';
 import { useRouter } from 'expo-router';
-import WalletScreen from './wallet';
 import { useWalletContext } from '../../contexts/WalletContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface HomeProps {
   userData: {
@@ -33,10 +33,20 @@ interface Transaction {
   rawTimestamp: number;
 }
 
+// Helper function to get greeting based on time of day
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+};
+
+// Helper function to format currency
 const formatCurrency = (amount: number) => {
   return Math.floor(amount).toLocaleString('vi-VN');
 };
 
+// Helper function to check if a timestamp is today
 const isToday = (timestamp: string) => {
   const date = new Date(timestamp);
   const today = new Date();
@@ -45,6 +55,49 @@ const isToday = (timestamp: string) => {
     date.getMonth() === today.getMonth() &&
     date.getFullYear() === today.getFullYear()
   );
+};
+
+// Helper function for animated count
+const formatAnimatedValue = (value: number): string => {
+  return Math.floor(value).toLocaleString('vi-VN');
+};
+
+// Optimized TypewriterText - chỉ hiển thị nếu text thay đổi
+const TypewriterText = ({ text, style }: { text: string, style: any }) => {
+  const [displayedText, setDisplayedText] = useState("");
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Reset text khi input thay đổi
+    setDisplayedText("");
+
+    // Clear previous interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    if (text) {
+      let index = 0;
+      intervalRef.current = setInterval(() => {
+        if (index <= text.length) {
+          setDisplayedText(text.substring(0, index));
+          index++;
+        } else {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+          }
+        }
+      }, 20); // Tăng tốc độ đánh máy
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [text]);
+
+  return <Text style={style}>{displayedText}</Text>;
 };
 
 const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
@@ -56,27 +109,138 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
   const [currentBalance, setCurrentBalance] = useState(0);
   const [expense, setExpense] = useState(0);
   const [income, setIncome] = useState(0);
-  const [isWalletModalVisible, setWalletModalVisible] = useState(false);
   const { wallet } = useWalletContext();
   const [expenseTrend, setExpenseTrend] = useState(0);
   const [incomeTrend, setIncomeTrend] = useState(0);
 
-  // Handle wallet creation or update
-  const handleWalletCreate = useCallback((newBalance: number) => {
-    refreshTransactions(); // Refresh transactions when wallet is created or updated
-  }, [refreshTransactions]);
+  // Add greeting state
+  const [greeting, setGreeting] = useState(getGreeting());
+
+  // Animation values for balance counting
+  const balanceCountAnim = useRef(new Animated.Value(0)).current;
+  const [countedBalance, setCountedBalance] = useState("0");
+  const shakeAnimation = useRef(new Animated.Value(0)).current;
+  const [prevBalance, setPrevBalance] = useState(0);
+
+  // Thêm animation values cho expense và income
+  const expenseCountAnim = useRef(new Animated.Value(0)).current;
+  const incomeCountAnim = useRef(new Animated.Value(0)).current;
+  const [countedExpense, setCountedExpense] = useState("0");
+  const [countedIncome, setCountedIncome] = useState("0");
+  const [prevExpense, setPrevExpense] = useState(0);
+  const [prevIncome, setPrevIncome] = useState(0);
+
+  // Update greeting based on time of day
+  useEffect(() => {
+    setGreeting(getGreeting());
+
+    const interval = setInterval(() => {
+      setGreeting(getGreeting());
+    }, 60 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Animate balance counting effect when currentBalance changes
+  useEffect(() => {
+    if (currentBalance > 0) {
+      // Tối ưu: Bỏ qua animation nếu sự thay đổi quá nhỏ và không phải lần đầu tiên
+      if (prevBalance > 0 && Math.abs(currentBalance - prevBalance) < 10) {
+        setCountedBalance(formatAnimatedValue(currentBalance));
+        setPrevBalance(currentBalance);
+        return;
+      }
+
+      balanceCountAnim.setValue(prevBalance);
+
+      Animated.timing(balanceCountAnim, {
+        toValue: currentBalance,
+        duration: 1000, // Giảm thời gian animation để tối ưu
+        useNativeDriver: false,
+        easing: Easing.out(Easing.ease)
+      }).start();
+
+      const listener = balanceCountAnim.addListener(({ value }) => {
+        setCountedBalance(formatAnimatedValue(value));
+      });
+
+      // Shake effect if balance has changed significantly
+      if (prevBalance > 0 && Math.abs(currentBalance - prevBalance) > 1000) {
+        Animated.sequence([
+          Animated.timing(shakeAnimation, { toValue: 5, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnimation, { toValue: -5, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnimation, { toValue: 5, duration: 50, useNativeDriver: true }),
+          Animated.timing(shakeAnimation, { toValue: 0, duration: 50, useNativeDriver: true })
+        ]).start();
+      }
+
+      setPrevBalance(currentBalance);
+      return () => balanceCountAnim.removeListener(listener);
+    }
+  }, [currentBalance]);
+
+  // Animate expense counting effect
+  useEffect(() => {
+    // Bỏ qua animation nếu giá trị thay đổi quá nhỏ
+    if (prevExpense > 0 && Math.abs(expense - prevExpense) < 10) {
+      setCountedExpense(formatAnimatedValue(expense));
+      setPrevExpense(expense);
+      return;
+    }
+
+    expenseCountAnim.setValue(prevExpense);
+
+    Animated.timing(expenseCountAnim, {
+      toValue: expense,
+      duration: 800, // Thời gian ngắn hơn cho expense
+      useNativeDriver: false,
+      easing: Easing.out(Easing.ease)
+    }).start();
+
+    const listener = expenseCountAnim.addListener(({ value }) => {
+      setCountedExpense(formatAnimatedValue(value));
+    });
+
+    setPrevExpense(expense);
+    return () => expenseCountAnim.removeListener(listener);
+  }, [expense]);
+
+  // Animate income counting effect
+  useEffect(() => {
+    // Bỏ qua animation nếu giá trị thay đổi quá nhỏ
+    if (prevIncome > 0 && Math.abs(income - prevIncome) < 10) {
+      setCountedIncome(formatAnimatedValue(income));
+      setPrevIncome(income);
+      return;
+    }
+
+    incomeCountAnim.setValue(prevIncome);
+
+    Animated.timing(incomeCountAnim, {
+      toValue: income,
+      duration: 800, // Thời gian ngắn hơn cho income
+      useNativeDriver: false,
+      easing: Easing.out(Easing.ease)
+    }).start();
+
+    const listener = incomeCountAnim.addListener(({ value }) => {
+      setCountedIncome(formatAnimatedValue(value));
+    });
+
+    setPrevIncome(income);
+    return () => incomeCountAnim.removeListener(listener);
+  }, [income]);
 
   // Load wallet and transactions
   useEffect(() => {
     const loadWalletAndTransactions = async () => {
       if (!user || !wallet) return;
-    
+
       try {
-        // Get all transactions for today
+        // Tối ưu: Sử dụng Promise.all để tải dữ liệu song song
         const csvTransactions = await getExpensesFromCSV(user.uid);
         const todayTransactions = csvTransactions.filter((t) => isToday(t.timestamp));
-    
-        // Format transactions for display
+
         const formattedTransactions = todayTransactions
           .map((t) => ({
             id: `${t.timestamp}-${Math.random()}`,
@@ -92,10 +256,10 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
             rawTimestamp: new Date(t.timestamp).getTime(),
           }))
           .sort((a, b) => b.rawTimestamp - a.rawTimestamp);
-    
+
         setTransactions(formattedTransactions);
-    
-        // Set income and expense from all today's transactions (for display purposes)
+
+        // Tính toán income/expense từ giao dịch hôm nay
         const allTodayTotals = todayTransactions.reduce(
           (acc, t) => {
             const amount = parseFloat(t.amount);
@@ -108,19 +272,17 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
           },
           { income: 0, expense: 0 }
         );
-        
+
         setIncome(allTodayTotals.income);
         setExpense(allTodayTotals.expense);
-    
-        // Get the last processed time from the wallet
+
+        // Xử lý các giao dịch chưa được xử lý
         const lastProcessedTime = wallet.lastProcessedTime || 0;
-        
-        // IMPORTANT: Only count UNPROCESSED transactions for balance updates
         const unprocessedTransactions = todayTransactions.filter(
           t => new Date(t.timestamp).getTime() > lastProcessedTime
         );
-        
-        // Calculate balance changes from unprocessed transactions only
+
+        // Tính toán từ giao dịch chưa xử lý
         const unprocessedTotals = unprocessedTransactions.reduce(
           (acc, t) => {
             const amount = parseFloat(t.amount);
@@ -133,26 +295,23 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
           },
           { income: 0, expense: 0 }
         );
-        
-        // Set the current balance based only on new transactions
-        const newCurrentBalance = wallet.currentBalance + 
+
+        const newCurrentBalance = wallet.currentBalance +
           unprocessedTotals.income - unprocessedTotals.expense;
-        
+
         setCurrentBalance(newCurrentBalance);
-    
-        // Only update wallet in storage if there are new unprocessed transactions
+
         if (unprocessedTransactions.length > 0) {
           const latestTimestamp = Math.max(
             ...unprocessedTransactions.map(t => new Date(t.timestamp).getTime())
           );
-          
+
           const updatedWallet = {
             ...wallet,
             currentBalance: newCurrentBalance,
             lastProcessedTime: latestTimestamp
           };
-          
-          // Pass userId and the updated wallet object
+
           await updateWallet(user.uid, updatedWallet);
         }
       } catch (error) {
@@ -183,26 +342,30 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.headerWrapper}>
-        <Image source={require('../../../assets/images/bgg.png')} style={styles.headerBg} />
+        <LinearGradient
+          colors={["#150f3c", "#09090b"]}
+          style={styles.headerBg}
+        />
         <View style={styles.header}>
           <View style={styles.headerTop}>
+            {/* User information section */}
             <View style={styles.userInfo}>
-              {userData?.avatarUrl && (
+              {userData?.avatarUrl ? (
                 <Image source={{ uri: userData.avatarUrl }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={20} color="#fff" />
+                </View>
               )}
+              <View style={styles.nameContainer}>
+                <Text style={styles.greetingText}>{greeting}</Text>
+                <Text style={styles.userName}>
+                  {userData.name ? userData.name.split(' ')[0] : 'User'}
+                </Text>
+              </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.accountSelector}
-              onPress={() => setWalletModalVisible(true)}
-            >
-              <View style={styles.accountIcon}>
-                <Ionicons name="wallet-outline" size={14} color="#fff" />
-              </View>
-              <Text style={styles.accountText}>All account</Text>
-              <Ionicons name="chevron-down" size={14} color="#fff" />
-            </TouchableOpacity>
-
+            {/* Notification button - move this right after user info */}
             <TouchableOpacity
               style={styles.notificationButton}
               onPress={() => {}}
@@ -212,15 +375,23 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
           </View>
         </View>
 
+        {/* Balance section - moved up to replace wallet container */}
         <View style={styles.balanceSection}>
           <Text style={styles.balanceLabel}>Current Balance</Text>
-          <Text style={styles.balanceAmount}>{formatCurrency(currentBalance)} VNĐ</Text>
+          <TypewriterText
+            text={`${countedBalance} VNĐ`}
+            style={styles.balanceAmount}
+          />
         </View>
 
         <View style={styles.overviewSection}>
+          {/* Card chi tiêu với hiệu ứng đếm số */}
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Expense</Text>
-            <Text style={styles.overviewAmount}>{formatCurrency(expense)} VNĐ</Text>
+            <TypewriterText
+              text={`${countedExpense} VNĐ`}
+              style={styles.overviewAmount}
+            />
             <View style={styles.trendContainer}>
               <Ionicons
                 name={expenseTrend > 0 ? 'arrow-up' : 'arrow-down'}
@@ -238,9 +409,13 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
             </View>
           </View>
 
+          {/* Card thu nhập với hiệu ứng đếm số */}
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Income</Text>
-            <Text style={styles.overviewAmount}>{formatCurrency(income)} VNĐ</Text>
+            <TypewriterText
+              text={`${countedIncome} VNĐ`}
+              style={styles.overviewAmount}
+            />
             <View style={styles.trendContainer}>
               <Ionicons
                 name={incomeTrend > 0 ? 'arrow-up' : 'arrow-down'}
@@ -261,13 +436,6 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
 
         <AIinsight userData={userData} />
       </View>
-
-      <WalletScreen
-        isVisible={isWalletModalVisible}
-        onClose={() => setWalletModalVisible(false)}
-        onWalletCreate={handleWalletCreate}
-        currentBalance={wallet?.currentBalance || 0}
-      />
     </ScrollView>
   );
 };
@@ -280,13 +448,13 @@ const styles = StyleSheet.create({
   headerWrapper: {
     position: 'relative',
     width: '100%',
-    paddingBottom: 20, // Add padding at the bottom
+    paddingBottom: 20,
   },
   headerBg: {
     position: 'absolute',
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    // Bỏ resizeMode: 'cover' vì không còn cần thiết cho gradient
   },
   header: {
     paddingHorizontal: 20,
@@ -294,41 +462,52 @@ const styles = StyleSheet.create({
   },
   headerTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-between', // Change to space-between
     alignItems: 'center',
   },
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1, // Allow it to take available space
+  },
+  rightContainer: {
+    flexDirection: 'row',
+    flex: 1,
+    justifyContent: 'flex-start', // Căn các phần tử về bên trái
+    paddingLeft: 10, // Thêm padding bên trái để dịch cả khối sang trái
+    alignItems: 'center',
+  },
+  nameContainer: {
+    flexShrink: 1, // Cho phép thu nhỏ nếu cần
   },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
     marginRight: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  greetingText: {
+    fontSize: 14,
+    color: '#d1d5db',
   },
   userName: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#fff',
-  },
-  accountSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 20,
-    padding: 4,
-    paddingRight: 8,
-  },
-  accountIcon: {
-    backgroundColor: '#1e174f',
-    padding: 8,
-    borderRadius: 16,
-  },
-  accountText: {
-    color: '#fff',
-    marginHorizontal: 8,
-    fontSize: 14,
+    marginTop: 2,
   },
   notificationButton: {
     padding: 8,
@@ -339,7 +518,8 @@ const styles = StyleSheet.create({
   },
   balanceSection: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: -10, // Đẩy lên trên
+    paddingVertical: 10, // Giảm khoảng trống trên dưới
   },
   balanceLabel: {
     color: '#9ca3af',

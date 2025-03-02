@@ -4,26 +4,50 @@ import { Platform } from 'react-native';
 export async function configureNotifications(): Promise<boolean> {
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    
+
+    let finalStatus = existingStatus;
     if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') {
-        return false;
-      }
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+        },
+        android: {
+          allowAlert: true,
+          allowSound: true,
+          allowAnnouncements: true,
+        },
+      });
+      finalStatus = status;
+    }
+
+    if (finalStatus !== 'granted') {
+      return false;
     }
 
     if (Platform.OS === 'android') {
+      // Tạo nhiều kênh thông báo cho Android
       await Notifications.setNotificationChannelAsync('default', {
-        name: 'Default',
+        name: 'Mặc định',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#FF231F7C',
+        enableVibrate: true,
+        enableLights: true,
+      });
+
+      await Notifications.setNotificationChannelAsync('reminders', {
+        name: 'Nhắc nhở',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        enableVibrate: true,
       });
     }
 
     return true;
   } catch (error) {
-    console.error('Error configuring notifications:', error);
+    console.error('Lỗi cấu hình thông báo:', error);
     return false;
   }
 }
@@ -69,8 +93,8 @@ export async function scheduleNotifications() {
     for (let hour = 8; hour <= 22; hour++) {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: `${getRandomEmoji()} Ghi chép chi tiêu gì chưa người đẹp?`,
-          body: 'Nhớ cập nhật chi tiêu để quản lý tài chính hiệu quả nhé! 💫',
+          title: `${getRandomEmoji()} Ghi chép chi tiêu đi nào`,
+          body: 'Nhớ cập nhật chi tiêu để quản lý chi tiêu hiệu quả nhé! 💫',
         },
         trigger: createTrigger(hour, 0), // Triggers at the start of each hour
       });

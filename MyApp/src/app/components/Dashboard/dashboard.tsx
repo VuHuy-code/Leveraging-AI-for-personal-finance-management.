@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  BackHandler, 
-  Animated, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  BackHandler,
+  Animated,
   PanResponder,
-  Dimensions 
+  Dimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons,FontAwesome6, AntDesign } from '@expo/vector-icons';
@@ -17,7 +17,7 @@ import DashboardHome from './dashboardHome';
 import DashboardBills from './dashboardBills';
 import DashboardSavings from './dashboardSubs';
 import DashboardSettings from './dashboardSetting';
-import { 
+import {
   getExpensesFromCSV,
   calculateDailyTrends
 } from '../../../services/firebase/storage';
@@ -66,33 +66,33 @@ const getRobotIcon = (currentBalance: number, expense: number, income: number, h
   if (!hasTransactions) {
     return "robot-confused-outline";
   }
-  
+
   // Check if balance is 0 or negative
   if (currentBalance <= 0) {
     return "robot-dead-outline";
   }
-  
+
   // Check if expense trend is increasing
   if (expenseTrend > 0) {
     return "robot-angry-outline";
   }
-  
+
   // Check if income is greater than expense
   if (income > expense) {
     return "robot-love-outline";
   }
-  
+
   // Default icon
   return "robot-outline";
 };
 
 const Dashboard: React.FC = () => {
   const { user, userData, logout, updateProfile } = useAuth();
-  
+
   // Add these context hooks
   const { wallet } = useWalletContext();
   const { refreshKey } = useTransactionContext();
-  
+
   // Update userData creation
   const userInfo: UserData | null = user && userData ? {
     uid: user.uid,
@@ -176,7 +176,7 @@ const Dashboard: React.FC = () => {
       setActiveAction(null);
     });
   };
-  
+
 
   const panResponder = useRef(
     PanResponder.create({
@@ -192,7 +192,7 @@ const Dashboard: React.FC = () => {
         const buttonY = 100;
 
         let hoveredButton: ActionButtonType | null = null;
-        
+
         if (moveY < buttonY - 60) {
           hoveredButton = 'camera';
         } else if (moveX < centerX - 50) {
@@ -265,7 +265,7 @@ const Dashboard: React.FC = () => {
     if (!userInfo) {
       return null; // Just return null, the useEffect above will handle the redirect
     }
-  
+
     switch (activeTab) {
       case 'Home':
         return <DashboardHome userData={userInfo} />;
@@ -274,10 +274,10 @@ const Dashboard: React.FC = () => {
       case 'Subs':
         return <DashboardSavings userData={userInfo} />;
       case 'Settings':
-        return <DashboardSettings 
-          userData={userInfo} 
-          onUpdateProfile={updateProfile} 
-          onLogout={handleLogout} 
+        return <DashboardSettings
+          userData={userInfo}
+          onUpdateProfile={updateProfile}
+          onLogout={handleLogout}
         />;
       default:
         return null;
@@ -295,7 +295,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const checkTodayTransactions = async () => {
       if (!user) return;
-      
+
       try {
         const csvTransactions = await getExpensesFromCSV(user.uid);
         const todayTransactions = csvTransactions.filter(t => isToday(t.timestamp));
@@ -314,7 +314,7 @@ const Dashboard: React.FC = () => {
         setIncome(totals.income);
         setExpense(totals.expense);
 
-        // Get current balance from active wallet
+        // Get current balance from wallet (thay đổi từ activeWallet sang wallet)
         if (wallet) {
           setCurrentBalance(wallet.currentBalance);
         }
@@ -336,19 +336,19 @@ const Dashboard: React.FC = () => {
         <View style={styles.contentContainer}>
           {renderContent()}
         </View>
-  
+
         {isActionsVisible && (
-          <Animated.View 
+          <Animated.View
             style={[
               styles.actionButtonsContainer,
               { opacity: actionButtonsScale }
             ]}
           >
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.actionButton,
                 styles.actionButtonLeft,
-                { 
+                {
                   transform: [
                     { scale: buttonScales.expense },
                     { translateX: buttonPositions.expense.x },
@@ -359,12 +359,12 @@ const Dashboard: React.FC = () => {
             >
               <MaterialCommunityIcons name="cash-minus" size={24} color="#fff" />
             </Animated.View>
-            
-            <Animated.View 
+
+            <Animated.View
               style={[
                 styles.actionButton,
                 styles.actionButtonTop,
-                { 
+                {
                   transform: [
                     { scale: buttonScales.camera },
                     { translateX: buttonPositions.camera.x },
@@ -375,12 +375,12 @@ const Dashboard: React.FC = () => {
             >
               <MaterialIcons name="camera-alt" size={24} color="#000" />
             </Animated.View>
-            
-            <Animated.View 
+
+            <Animated.View
               style={[
                 styles.actionButton,
                 styles.actionButtonRight,
-                { 
+                {
                   transform: [
                     { scale: buttonScales.income },
                     { translateX: buttonPositions.income.x },
@@ -393,17 +393,17 @@ const Dashboard: React.FC = () => {
             </Animated.View>
           </Animated.View>
         )}
-        
+
         <View style={styles.bottomNav}>
           <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Home')}>
             <AntDesign name="home" size={24} color={activeTab === 'Home' ? '#fff' : '#666'} />
           </TouchableOpacity>
-  
+
           <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Bills')}>
             <Ionicons name="receipt-outline" size={24} color={activeTab === 'Bills' ? '#fff' : '#666'} />
           </TouchableOpacity>
-  
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.addButton}
             onPress={() => router.push('./chatbot')}
             onLongPress={showActionButtons}
@@ -416,18 +416,18 @@ const Dashboard: React.FC = () => {
             {...panResponder.panHandlers}
           >
             <View style={styles.plusButton}>
-              <MaterialCommunityIcons 
-                name={getRobotIcon(currentBalance, expense, income, hasTransactions, expenseTrend)} 
-                size={32} 
-                color="#000" 
+              <MaterialCommunityIcons
+                name={getRobotIcon(currentBalance, expense, income, hasTransactions, expenseTrend)}
+                size={32}
+                color="#000"
               />
             </View>
           </TouchableOpacity>
-  
+
           <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Subs')}>
             <MaterialCommunityIcons name="piggy-bank-outline" size={24} color={activeTab === 'Subs' ? '#fff' : '#666'} />
           </TouchableOpacity>
-  
+
           <TouchableOpacity style={styles.navItem} onPress={() => setActiveTab('Settings')}>
             <AntDesign name="setting" size={24} color={activeTab === 'Settings' ? '#fff' : '#666'} />
           </TouchableOpacity>
@@ -438,7 +438,6 @@ const Dashboard: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  
   container: {
     flex: 1,
   },
@@ -463,10 +462,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: '#000',
+    backgroundColor: 'rgba(9, 9, 11, 0.6)', // Trong suốt với màu nền tương tự màu nền chính
     borderRadius: 20,
     paddingVertical: 10,
     paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)', // Thêm viền nhẹ
   },
   navItem: {
     padding: 10,

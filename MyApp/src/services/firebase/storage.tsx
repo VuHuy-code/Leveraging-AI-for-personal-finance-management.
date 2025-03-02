@@ -111,7 +111,7 @@ async function getCSVFilesInRange(
 ): Promise<string[]> {
   const storage = getStorage();
   const fileUrls: string[] = [];
-  
+
   let currentDate = new Date(startDate);
   while (currentDate <= endDate) {
     const path = getExpenseStoragePath(userId, currentDate);
@@ -124,7 +124,7 @@ async function getCSVFilesInRange(
     }
     currentDate.setDate(currentDate.getDate() + 1);
   }
-  
+
   return fileUrls;
 }
 
@@ -148,17 +148,17 @@ export const getMonthlyExpenses = async (
 ): Promise<Expense[]> => {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0); // Last day of month
-  
+
   const fileUrls = await getCSVFilesInRange(userId, startDate, endDate);
   const allExpenses: Expense[] = [];
-  
+
   for (const url of fileUrls) {
     const response = await fetch(url);
     const csvContent = await response.text();
     const expenses = parseCSVToExpenses(csvContent);
     allExpenses.push(...expenses);
   }
-  
+
   return allExpenses;
 };
 
@@ -171,17 +171,17 @@ export const getQuarterlyExpenses = async (
   const startMonth = (quarter - 1) * 3 + 1;
   const startDate = new Date(year, startMonth - 1, 1);
   const endDate = new Date(year, startMonth + 2, 0); // Last day of quarter
-  
+
   const fileUrls = await getCSVFilesInRange(userId, startDate, endDate);
   const allExpenses: Expense[] = [];
-  
+
   for (const url of fileUrls) {
     const response = await fetch(url);
     const csvContent = await response.text();
     const expenses = parseCSVToExpenses(csvContent);
     allExpenses.push(...expenses);
   }
-  
+
   return allExpenses;
 };
 
@@ -192,17 +192,17 @@ export const getYearlyExpenses = async (
 ): Promise<Expense[]> => {
   const startDate = new Date(year, 0, 1);
   const endDate = new Date(year, 11, 31);
-  
+
   const fileUrls = await getCSVFilesInRange(userId, startDate, endDate);
   const allExpenses: Expense[] = [];
-  
+
   for (const url of fileUrls) {
     const response = await fetch(url);
     const csvContent = await response.text();
     const expenses = parseCSVToExpenses(csvContent);
     allExpenses.push(...expenses);
   }
-  
+
   return allExpenses;
 };
 
@@ -449,7 +449,7 @@ export const analyzeTimeRange = (question: string): {
 
   // Kiểm tra các từ khóa theo tháng
   if (lowerQuestion.includes('tháng này')) {
-    return { 
+    return {
       type: 'month',
       year: today.getFullYear(),
       month: today.getMonth() + 1
@@ -483,7 +483,7 @@ export const analyzeTimeRange = (question: string): {
   const dateMatch = lowerQuestion.match(datePattern);
   if (dateMatch) {
     const [_, day, month, year] = dateMatch;
-    return { 
+    return {
       type: 'day',
       date: new Date(+year, +month - 1, +day)
     };
@@ -573,7 +573,7 @@ export const getWallet = async (userId: string): Promise<Wallet | null> => {
 
 export const saveWallet = async (userId: string, wallet: Wallet | null): Promise<void> => {
   if (!userId) throw new Error('User ID is required');
-  
+
   const storage = getStorage();
   const walletPath = `wallets/${userId}/wallet.json`;
   const fileRef = ref(storage, walletPath);
@@ -584,7 +584,7 @@ export const saveWallet = async (userId: string, wallet: Wallet | null): Promise
       await deleteObject(fileRef);
       return;
     }
-    
+
     // Otherwise save/update the wallet
     const walletData = JSON.stringify(wallet);
     const file = new Blob([walletData], { type: 'application/json' });
@@ -732,7 +732,7 @@ export interface SavingGoal {
 // Add these functions for savings management
 export const saveSavingGoals = async (userId: string, goals: SavingGoal[]): Promise<void> => {
   if (!userId) throw new Error('User ID is required');
-  
+
   const storage = getStorage();
   const savingsPath = `savings/${userId}/goals.json`;
   const fileRef = ref(storage, savingsPath);
@@ -772,12 +772,12 @@ export const getSavingGoals = async (userId: string): Promise<SavingGoal[]> => {
 
 // Add function to update a specific saving goal
 export const updateSavingGoal = async (
-  userId: string, 
-  goalId: string, 
+  userId: string,
+  goalId: string,
   updates: Partial<SavingGoal>
 ): Promise<void> => {
   const goals = await getSavingGoals(userId);
-  const updatedGoals = goals.map(goal => 
+  const updatedGoals = goals.map(goal =>
     goal.id === goalId ? { ...goal, ...updates } : goal
   );
   await saveSavingGoals(userId, updatedGoals);
@@ -791,26 +791,26 @@ export const addToSavingGoal = async (userId: string, goalNameOrId: string, amou
 }> => {
   // Lấy danh sách mục tiêu
   const goals = await getSavingGoals(userId);
-  
+
   // Tìm mục tiêu phù hợp (theo ID hoặc tên tương tự)
-  const goal = goals.find(g => 
-    g.id === goalNameOrId || 
+  const goal = goals.find(g =>
+    g.id === goalNameOrId ||
     g.name.toLowerCase().includes(goalNameOrId.toLowerCase())
   );
-  
+
   if (!goal) {
     return { success: false, message: `Không tìm thấy mục tiêu tiết kiệm "${goalNameOrId}"` };
   }
-  
+
   // Cập nhật số tiền
   const updatedGoal = {
     ...goal,
     current: goal.current + amount
   };
-  
+
   // Cập nhật mục tiêu cụ thể
   await updateSavingGoal(userId, goal.id, { current: updatedGoal.current });
-  
+
   return { success: true, goal: updatedGoal };
 };
 
@@ -881,6 +881,30 @@ export const updateCategoryTotals = async (
   }
 };
 
+export const getAllExpenses = async (userId: string): Promise<Expense[]> => {
+  if (!userId) throw new Error('User ID is required');
+
+  const today = new Date();
+  const startDate = new Date(today.getFullYear(), today.getMonth(), 1); // First day of current month
+  const endDate = today; // Current date
+
+  try {
+    const fileUrls = await getCSVFilesInRange(userId, startDate, endDate);
+    const allExpenses: Expense[] = [];
+
+    for (const url of fileUrls) {
+      const response = await fetch(url);
+      const csvContent = await response.text();
+      const expenses = parseCSVToExpenses(csvContent);
+      allExpenses.push(...expenses);
+    }
+
+    return allExpenses;
+  } catch (error) {
+    console.error('Error getting all expenses:', error);
+    return [];
+  }
+};
 export const getCategoryTotals = async (userId: string): Promise<CategoryTotal[]> => {
   if (!userId) throw new Error('User ID is required');
 
