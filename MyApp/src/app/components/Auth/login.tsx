@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -23,10 +24,13 @@ import { Link, useRouter } from 'expo-router';
 import { login, resetPassword } from '../../../services/firebase/auth';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons, FontAwesome6, AntDesign } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../hooks/useAuth';
 
 const { width, height } = Dimensions.get('window');
 
 const Login: React.FC = () => {
+  const { login } = useAuth();
   const [isChecked, setIsChecked] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,6 +48,18 @@ const Login: React.FC = () => {
   const modalScaleAnim = useRef(new Animated.Value(0.9)).current;
   const modalOpacityAnim = useRef(new Animated.Value(0)).current;
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
+
+  // Continuous rotation animation function
+  const startSpinAnimation = () => {
+    spinAnim.setValue(0);
+    Animated.timing(spinAnim, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+      easing: Easing.linear,
+    }).start(() => startSpinAnimation());
+  };
 
   useEffect(() => {
     // Start animations when component mounts
@@ -59,6 +75,32 @@ const Login: React.FC = () => {
         useNativeDriver: true,
       }),
     ]).start();
+  }, []);
+
+  // Start spin animation when loading states change
+  useEffect(() => {
+    if (isLoading || isResetting) {
+      startSpinAnimation();
+    }
+  }, [isLoading, isResetting]);
+
+  // Kiểm tra xem có thông tin đã lưu không khi component mount
+  useEffect(() => {
+    const checkSavedLogin = async () => {
+      try {
+        const savedEmail = await AsyncStorage.getItem('userEmail');
+        const rememberMe = await AsyncStorage.getItem('rememberMe');
+
+        if (savedEmail && rememberMe === 'true') {
+          setEmail(savedEmail);
+          setIsChecked(true);
+        }
+      } catch (error) {
+        console.error('Lỗi khi kiểm tra thông tin đăng nhập đã lưu:', error);
+      }
+    };
+
+    checkSavedLogin();
   }, []);
 
   const handleLogin = async () => {
@@ -83,7 +125,7 @@ const Login: React.FC = () => {
 
     setIsLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, isChecked);
     } catch (error) {
       Alert.alert('Error', 'Login failed. Please check your credentials.');
     } finally {
@@ -281,7 +323,7 @@ const Login: React.FC = () => {
                       <View style={styles.loadingContainer}>
                         <Animated.View style={{
                           transform: [{
-                            rotate: fadeAnim.interpolate({
+                            rotate: spinAnim.interpolate({
                               inputRange: [0, 1],
                               outputRange: ['0deg', '360deg']
                             })
@@ -393,7 +435,7 @@ const Login: React.FC = () => {
                     <View style={styles.loadingContainer}>
                       <Animated.View style={{
                         transform: [{
-                          rotate: fadeAnim.interpolate({
+                          rotate: spinAnim.interpolate({
                             inputRange: [0, 1],
                             outputRange: ['0deg', '360deg']
                           })

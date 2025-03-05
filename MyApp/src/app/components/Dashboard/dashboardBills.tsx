@@ -166,172 +166,207 @@ interface PieChartProps {
   totalBalance: number;
 }
 
-// Updated PieChart component with white borders and increased gaps between segments
+// Updated PieChart component with enhanced category-specific shadows
+// Updated PieChart component with enhanced category-specific shadows
 const PieChart: React.FC<PieChartProps> = ({ data, totalBalance }) => {
   const radius = 90;
-  const strokeWidth = 22; // Width of the donut ring
+  const strokeWidth = 20; // Width of the donut ring
   const center = radius + 20;
-  const backgroundColor = "#09090b"; // Match app background color
-  const gapAngle = 0.19; // Gap between segments for clear separation
-  const remainingColor = "#3A3A3C"; // Gray color for remaining section
+  const gapAngle = 0; // Đã đặt giá trị là 0 để loại bỏ khoảng cách
 
   // Calculate total expenses for percentage
   const totalExpenses = data.reduce((sum, item) => sum + item.amount, 0);
+
+  // The remaining budget is what's left after all expenses
   const remainingBudget = Math.max(0, totalBalance - totalExpenses);
 
   // Start from the top (12 o'clock position)
   let startAngle = -Math.PI / 2;
 
-  // Create the donut chart paths with proper gaps and rounded ends
+  // Create the donut chart paths with proper gaps
   const createDonutPath = (startAngle: number, endAngle: number) => {
-    // Add gap between segments
-    const adjustedStartAngle = startAngle + (gapAngle / 2);
-    const adjustedEndAngle = endAngle - (gapAngle / 2);
-
     // Calculate start and end points
-    const startX = center + radius * Math.cos(adjustedStartAngle);
-    const startY = center + radius * Math.sin(adjustedStartAngle);
-    const endX = center + radius * Math.cos(adjustedEndAngle);
-    const endY = center + radius * Math.sin(adjustedEndAngle);
+    const startX = center + radius * Math.cos(startAngle);
+    const startY = center + radius * Math.sin(startAngle);
+    const endX = center + radius * Math.cos(endAngle);
+    const endY = center + radius * Math.sin(endAngle);
 
     // Determine if the arc should be drawn the long way around
-    const largeArcFlag = adjustedEndAngle - adjustedStartAngle > Math.PI ? 1 : 0;
+    const largeArcFlag = endAngle - startAngle > Math.PI ? 1 : 0;
 
     // Create the SVG path
     return `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
   };
 
+  // Create the donut chart arcs
   return (
     <View style={[
       styles.chartContainer,
       {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
+        shadowColor: "#6c63ff",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
         shadowRadius: 12,
-        elevation: 10,
+        elevation: 8,
         borderRadius: center,
         padding: 5,
       }
     ]}>
-      <Svg width={center * 2} height={center * 2}
-        style={{
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 8,
-        }}
-      >
+      <Svg width={center * 2} height={center * 2}>
         <Defs>
-          <SvgLinearGradient id="shadowGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <Stop offset="0%" stopColor="rgba(0,0,0,0.1)" stopOpacity="0.9" />
-            <Stop offset="100%" stopColor="rgba(0,0,0,0.3)" stopOpacity="0.9" />
-          </SvgLinearGradient>
+          {/* Create glowing filters for each category */}
+          {data.map((item, index) => (
+            <SvgLinearGradient key={`gradient-${index}`} id={`glow-${index}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop offset="0%" stopColor={item.color} stopOpacity="0.8" />
+              <Stop offset="100%" stopColor={item.color} stopOpacity="0.2" />
+            </SvgLinearGradient>
+          ))}
 
-          {/* Create gradient for remaining section - now using gray */}
+          {/* Create gradient for remaining section */}
           <SvgLinearGradient id="remainingGrad" gradientUnits="userSpaceOnUse" x1="-100" y1="-100" x2="100" y2="100">
-            <Stop offset="0%" stopColor="#4A4A4C" />
-            <Stop offset="100%" stopColor="#2A2A2C" />
+            <Stop offset="0%" stopColor="#5A5A5C" />
+            <Stop offset="100%" stopColor="#3A3A3C" />
           </SvgLinearGradient>
         </Defs>
 
-        {/* Base shadow circle */}
-        <Circle
-          cx={center}
-          cy={center + 4}
-          r={radius + 2}
-          fill="url(#shadowGradient)"
-          opacity={0.5}
-        />
-
-        {/* Background circle for the chart area */}
-        <Circle
-          cx={center}
-          cy={center}
-          r={radius + strokeWidth/2 + 3}
-          fill={backgroundColor}
-        />
-
-        {/* Background outline circle */}
-        <Circle
-          cx={center}
-          cy={center}
-          r={radius}
-          fill="transparent"
-          stroke="rgba(40, 40, 40, 0.5)"
-          strokeWidth={strokeWidth}
-        />
-
-        {/* Render each segment of the donut with gaps and rounded caps */}
+        {/* Render each segment of the donut */}
         <G>
           {data.length > 0 && data.map((item, index) => {
-            // Calculate segment angles with space for gaps between all segments
-            const totalGapSpace = gapAngle * (data.length + (remainingBudget > 0 ? 1 : 0));
-            const segmentAngle = (item.amount / totalBalance) * (2 * Math.PI - totalGapSpace);
+            // Calculate segment angles
+            const segmentAngle = (item.amount / totalBalance) * (2 * Math.PI);
             const endAngle = startAngle + segmentAngle;
-
-            // Create a unique gradient ID for each segment
-            const gradientId = `grad${index}`;
-            const baseColor = item.color;
-            const lighterColor = baseColor + "FF"; // Full opacity
-            const darkerColor = baseColor + "AA"; // Lower opacity
 
             // Create the path for this segment
             const path = createDonutPath(startAngle, endAngle);
 
-            // Update startAngle for the next segment, including gap
+            // Update startAngle for the next segment
             const currentStartAngle = startAngle;
-            startAngle = endAngle + gapAngle;
+            startAngle = endAngle;
+
+            // Create shadow effects for each category
+            const outerRadius = radius + 8; // Increased for wider shadow
+            const shadowPath = `
+              M ${center + outerRadius * Math.cos(currentStartAngle)}
+                ${center + outerRadius * Math.sin(currentStartAngle)}
+              A ${outerRadius} ${outerRadius} 0
+                ${endAngle - currentStartAngle > Math.PI ? 1 : 0} 1
+                ${center + outerRadius * Math.cos(endAngle)}
+                ${center + outerRadius * Math.sin(endAngle)}
+            `;
 
             return (
               <React.Fragment key={index}>
-                <Defs>
-                  <SvgLinearGradient
-                    id={gradientId}
-                    gradientUnits="userSpaceOnUse"
-                    x1="-100"
-                    y1="-100"
-                    x2="100"
-                    y2="100"
-                  >
-                    <Stop offset="0%" stopColor={lighterColor} />
-                    <Stop offset="100%" stopColor={darkerColor} />
-                  </SvgLinearGradient>
-                </Defs>
+                {/* Draw multiple layers of shadow for each category */}
+                <Path
+                  d={shadowPath}
+                  stroke={item.color}
+                  strokeWidth={4}
+                  fill="transparent"
+                  strokeLinecap="butt" // Bỏ bo tròn ở hai đầu
+                  opacity={0.5}
+                  strokeOpacity={0.7}
+                />
 
+                {/* Draw a second layer of shadow further out */}
+                <Path
+                  d={`
+                    M ${center + (outerRadius+4) * Math.cos(currentStartAngle)}
+                      ${center + (outerRadius+4) * Math.sin(currentStartAngle)}
+                    A ${outerRadius+4} ${outerRadius+4} 0
+                      ${endAngle - currentStartAngle > Math.PI ? 1 : 0} 1
+                      ${center + (outerRadius+4) * Math.cos(endAngle)}
+                      ${center + (outerRadius+4) * Math.sin(endAngle)}
+                  `}
+                  stroke={item.color}
+                  strokeWidth={2}
+                  fill="transparent"
+                  strokeLinecap="butt" // Bỏ bo tròn ở hai đầu
+                  opacity={0.3}
+                  strokeOpacity={0.5}
+                />
+
+                {/* Draw the main segment with solid color */}
                 <Path
                   d={path}
-                  stroke={`url(#${gradientId})`}
+                  stroke={item.color}
                   strokeWidth={strokeWidth}
                   fill="transparent"
-                  strokeLinecap="round"
+                  strokeLinecap="butt" // Bỏ bo tròn ở hai đầu
+                />
+
+                {/* Add a subtle inner glow along the segment */}
+                <Path
+                  d={path}
+                  stroke={`url(#glow-${index})`}
+                  strokeWidth={strokeWidth - 8}
+                  fill="transparent"
+                  strokeLinecap="butt" // Bỏ bo tròn ở hai đầu
+                  opacity={0.6}
                 />
               </React.Fragment>
             );
           })}
 
-          {/* Remaining budget segment with gap and rounded caps - now gray */}
+          {/* Remaining budget segment with custom shadow */}
           {remainingBudget > 0 && (
-            <Path
-              d={createDonutPath(startAngle, -Math.PI / 2 + 2 * Math.PI - gapAngle/2)}
-              stroke="url(#remainingGrad)"
-              strokeWidth={strokeWidth}
-              fill="transparent"
-              strokeLinecap="round"
-            />
+            <>
+              {/* Draw the outer glow for remaining segment */}
+              <Path
+                d={`
+                  M ${center + (radius+8) * Math.cos(startAngle)}
+                    ${center + (radius+8) * Math.sin(startAngle)}
+                  A ${radius+8} ${radius+8} 0
+                    ${(-Math.PI/2 + 2*Math.PI) - startAngle > Math.PI ? 1 : 0} 1
+                    ${center + (radius+8) * Math.cos(-Math.PI/2 + 2*Math.PI)}
+                    ${center + (radius+8) * Math.sin(-Math.PI/2 + 2*Math.PI)}
+                `}
+                stroke="#5A5A5C"
+                strokeWidth={4}
+                fill="transparent"
+                strokeLinecap="butt" // Bỏ bo tròn ở hai đầu
+                opacity={0.5}
+              />
+
+              {/* Draw a second layer of shadow for remaining section */}
+              <Path
+                d={`
+                  M ${center + (radius+12) * Math.cos(startAngle)}
+                    ${center + (radius+12) * Math.sin(startAngle)}
+                  A ${radius+12} ${radius+12} 0
+                    ${(-Math.PI/2 + 2*Math.PI) - startAngle > Math.PI ? 1 : 0} 1
+                    ${center + (radius+12) * Math.cos(-Math.PI/2 + 2*Math.PI)}
+                    ${center + (radius+12) * Math.sin(-Math.PI/2 + 2*Math.PI)}
+                `}
+                stroke="#5A5A5C"
+                strokeWidth={2}
+                fill="transparent"
+                strokeLinecap="butt" // Bỏ bo tròn ở hai đầu
+                opacity={0.3}
+              />
+
+              {/* Draw the main remaining segment */}
+              <Path
+                d={createDonutPath(startAngle, -Math.PI / 2 + 2 * Math.PI)}
+                stroke="#3A3A3C"
+                strokeWidth={strokeWidth}
+                fill="transparent"
+                strokeLinecap="butt" // Bỏ bo tròn ở hai đầu
+              />
+
+              {/* Add a subtle inner glow for remaining segment */}
+              <Path
+                d={createDonutPath(startAngle, -Math.PI / 2 + 2 * Math.PI)}
+                stroke="url(#remainingGrad)"
+                strokeWidth={strokeWidth - 8}
+                fill="transparent"
+                strokeLinecap="butt" // Bỏ bo tròn ở hai đầu
+                opacity={0.4}
+              />
+            </>
           )}
         </G>
 
-        {/* Center circle with subtle glow effect */}
-        <Circle
-          cx={center}
-          cy={center}
-          r={radius - 30}
-          fill="rgba(9, 9, 11, 0.8)"
-        />
-
-        {/* Inner content showing remaining budget */}
+        {/* Inner content showing remaining budget - maintain text with slight adjustment */}
         <G>
           <SvgText
             fill="#f5f5f5"
@@ -341,7 +376,7 @@ const PieChart: React.FC<PieChartProps> = ({ data, totalBalance }) => {
             x={center}
             y={center - 15}
           >
-            Remaining
+            Available
           </SvgText>
           <SvgText
             fill="#22c55e"
@@ -382,21 +417,23 @@ const PieChart: React.FC<PieChartProps> = ({ data, totalBalance }) => {
                   padding: 10,
                   shadowColor: item.color,
                   shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 3,
-                  elevation: 2,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 4,
+                  elevation: 3,
+                  borderWidth: 1,
+                  borderColor: `${item.color}30`,
                 }
               ]}
             >
-              <LinearGradient
-                colors={[item.color, item.color + "AA"]}
+              <View
                 style={[styles.legendColor, {
+                  backgroundColor: item.color,
                   borderRadius: 9,
                   shadowColor: item.color,
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.5,
-                  shadowRadius: 2,
-                  elevation: 2,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.6,
+                  shadowRadius: 3,
+                  elevation: 3,
                 }]}
               />
               <View style={styles.legendTextContainer}>
@@ -411,7 +448,7 @@ const PieChart: React.FC<PieChartProps> = ({ data, totalBalance }) => {
           );
         })}
 
-        {/* Remaining budget in legend - using the same gray gradient */}
+        {/* Remaining budget in legend */}
         {remainingBudget > 0 && (
           <View
             style={[
@@ -421,23 +458,25 @@ const PieChart: React.FC<PieChartProps> = ({ data, totalBalance }) => {
                 borderRadius: 10,
                 marginBottom: 8,
                 padding: 10,
-                shadowColor: "#3A3A3C",
+                shadowColor: "#5A5A5C",
                 shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.2,
-                shadowRadius: 3,
-                elevation: 2,
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+                elevation: 3,
+                borderWidth: 1,
+                borderColor: "rgba(90, 90, 92, 0.3)",
               }
             ]}
           >
-            <LinearGradient
-              colors={["#4A4A4C", "#2A2A2C"]} // Matching the chart gradient
+            <View
               style={[styles.legendColor, {
+                backgroundColor: "#3A3A3C",
                 borderRadius: 9,
-                shadowColor: "#3A3A3C",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.5,
-                shadowRadius: 2,
-                elevation: 2,
+                shadowColor: "#5A5A5C",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.6,
+                shadowRadius: 3,
+                elevation: 3,
               }]}
             />
             <View style={styles.legendTextContainer}>
@@ -473,6 +512,8 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+  const { refreshKey } = useTransactionContext();
+
   const fetchCategoryTotals = async () => {
     try {
       const totals = await getCategoryTotals(userData.uid);
@@ -480,6 +521,10 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
 
       setCategoryTotals(totals);
       setTotalBalance(wallet ? wallet.balance : 0);
+      const totalIncome = totals.reduce((sum, category) => sum + category.totalIncome, 0);
+      console.log(`Total income from categories: ${totalIncome} VNĐ`);
+      console.log(`Total expenses: ${totals.reduce((sum, category) => sum + category.totalExpense, 0)} VNĐ`);
+      console.log(`Wallet balance: ${wallet ? wallet.balance : 0} VNĐ`);
 
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -564,14 +609,27 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
   };
 
   useEffect(() => {
-    fetchTransactions(selectedDate);
-  }, [selectedDate]);
+    if (activeTab === "daily") {
+      fetchTransactions(selectedDate);
+    }
+  }, [selectedDate, activeTab]);
 
   useEffect(() => {
     if (activeTab === "monthly") {
       fetchMonthlyTransactions(selectedMonth, selectedYear);
+      fetchCategoryTotals();
     }
   }, [activeTab, selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    // Refresh data when refreshKey changes
+    if (activeTab === "daily") {
+      fetchTransactions(selectedDate);
+    } else {
+      fetchMonthlyTransactions(selectedMonth, selectedYear);
+      fetchCategoryTotals();
+    }
+  }, [refreshKey]);
 
   const handleTabChange = (tab: "daily" | "monthly") => {
     // Animate the slider
@@ -820,13 +878,25 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
       );
     } else {
       // Monthly tab render with animation
+      // Only include expense categories in the pie chart data
       const spendingData = categoryTotals
-        .filter(category => category.category.toLowerCase() !== "khác") // Filter out "Other" category
+        .filter(category =>
+          // Filter out "khác" category AND only include categories that have expenses
+          category.category.toLowerCase() !== "khác" &&
+          category.totalExpense > 0
+        )
         .map((category) => ({
           category: category.category,
           amount: category.totalExpense,
           color: getCategoryColor(category.category),
         }));
+
+      // Calculate total income to add to the available balance
+      const totalIncome = categoryTotals.reduce((sum, category) =>
+        sum + category.totalIncome, 0);
+
+      // Add income to totalBalance to correctly reflect available funds
+      const adjustedTotalBalance = totalBalance + totalIncome;
 
       return (
         <Animated.View
@@ -860,9 +930,24 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
                 {formatCurrency(totalBalance)} VNĐ
               </Text>
             </View>
+            {totalIncome > 0 && (
+              <View>
+                <Text style={[styles.balanceLabel, { color: "#a8a8a8", textAlign: 'right' }]}>
+                  Income This Month
+                </Text>
+                <Text
+                  style={[
+                    styles.balanceAmount,
+                    { color: "#22c55e", fontWeight: "700", textAlign: 'right' },
+                  ]}
+                >
+                  +{formatCurrency(totalIncome)} VNĐ
+                </Text>
+              </View>
+            )}
           </LinearGradient>
 
-          <PieChart data={spendingData} totalBalance={totalBalance} />
+          <PieChart data={spendingData} totalBalance={adjustedTotalBalance} />
         </Animated.View>
       );
     }

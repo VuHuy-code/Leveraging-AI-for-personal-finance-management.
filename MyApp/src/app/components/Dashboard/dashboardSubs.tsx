@@ -25,6 +25,7 @@ import Savingsinsight from "./Savingsinsight";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useSavings } from '../../contexts/SavingsContext';
+import SavingGoalUpdate from "./SavingGoalUpdate";
 
 // Get screen dimensions for responsive design
 const { width } = Dimensions.get("window");
@@ -457,6 +458,27 @@ const DashboardSavings: React.FC<DashboardSavingsProps> = ({ userData }) => {
     return category ? category.color : "#64748b";
   };
 
+  // Thêm state mới để quản lý modal cập nhật tiến độ
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
+  const [updateModalVisible, setUpdateModalVisible] = useState(false);
+
+  // Thêm function xử lý khi người dùng nhấn vào một mục tiêu
+  const handleGoalPress = (goalId: string) => {
+    setSelectedGoalId(goalId);
+    setUpdateModalVisible(true);
+  };
+
+  // Thêm function đóng modal cập nhật
+  const handleCloseUpdateModal = () => {
+    setUpdateModalVisible(false);
+    setSelectedGoalId(null);
+
+    // Tải lại dữ liệu sau khi cập nhật
+    setTimeout(() => {
+      loadSavings();
+    }, 500);
+  };
+
   console.log("Modal visible state:", modalVisible);
 
   return (
@@ -562,6 +584,8 @@ const DashboardSavings: React.FC<DashboardSavingsProps> = ({ userData }) => {
                       styles.savingItem,
                       index === 0 && styles.firstSavingItem,
                     ]}
+                    onPress={() => handleGoalPress(item.id)} // Thêm sự kiện onPress
+                    activeOpacity={0.7}
                   >
                     <View
                       style={[
@@ -642,6 +666,15 @@ const DashboardSavings: React.FC<DashboardSavingsProps> = ({ userData }) => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      {/* Thêm Modal cập nhật mục tiêu tiết kiệm */}
+      {selectedGoalId && (
+        <SavingGoalUpdate
+          goalId={selectedGoalId}
+          isVisible={updateModalVisible}
+          onClose={handleCloseUpdateModal}
+        />
+      )}
 
       {/* New Goal Modal */}
       <Modal

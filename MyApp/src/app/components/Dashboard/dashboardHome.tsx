@@ -237,7 +237,7 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
       if (!user || !wallet) return;
 
       try {
-        // Tối ưu: Sử dụng Promise.all để tải dữ liệu song song
+        // Get today's transactions from CSV
         const csvTransactions = await getExpensesFromCSV(user.uid);
         const todayTransactions = csvTransactions.filter((t) => isToday(t.timestamp));
 
@@ -259,7 +259,7 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
 
         setTransactions(formattedTransactions);
 
-        // Tính toán income/expense từ giao dịch hôm nay
+        // Recalculate daily totals from the fresh CSV data
         const allTodayTotals = todayTransactions.reduce(
           (acc, t) => {
             const amount = parseFloat(t.amount);
@@ -273,16 +273,17 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
           { income: 0, expense: 0 }
         );
 
+        // Update today's income/expense totals with the fresh values
         setIncome(allTodayTotals.income);
         setExpense(allTodayTotals.expense);
 
-        // Xử lý các giao dịch chưa được xử lý
+        // Update wallet balance with the latest transactions
         const lastProcessedTime = wallet.lastProcessedTime || 0;
         const unprocessedTransactions = todayTransactions.filter(
           t => new Date(t.timestamp).getTime() > lastProcessedTime
         );
 
-        // Tính toán từ giao dịch chưa xử lý
+        // Calculate totals from unprocessed transactions
         const unprocessedTotals = unprocessedTransactions.reduce(
           (acc, t) => {
             const amount = parseFloat(t.amount);
@@ -296,6 +297,7 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
           { income: 0, expense: 0 }
         );
 
+        // Calculate and update the new current balance
         const newCurrentBalance = wallet.currentBalance +
           unprocessedTotals.income - unprocessedTotals.expense;
 
@@ -320,7 +322,7 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
     };
 
     loadWalletAndTransactions();
-  }, [user, wallet, refreshKey]);
+  }, [user, wallet, refreshKey]); // refreshKey will trigger reload when transactions change
 
   // Calculate trends
   useEffect(() => {
@@ -367,7 +369,10 @@ const DashboardHome: React.FC<HomeProps> = ({ userData }) => {
 
             {/* Notification button - move this right after user info */}
             <TouchableOpacity
-              style={styles.notificationButton}
+              style={[
+                styles.notificationButton,
+                { backgroundColor: "rgba(61, 46, 156, 0.3)" },
+              ]}
               onPress={() => {}}
             >
               <Ionicons name="notifications" size={20} color="#fff" />
@@ -511,10 +516,10 @@ const styles = StyleSheet.create({
   },
   notificationButton: {
     padding: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   balanceSection: {
     alignItems: 'center',

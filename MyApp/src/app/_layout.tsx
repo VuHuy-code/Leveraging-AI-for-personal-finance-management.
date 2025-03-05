@@ -6,10 +6,12 @@ import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useAuth } from './hooks/useAuth';
 import * as Notifications from 'expo-notifications';
-import { registerForPushNotificationsAsync, scheduleNotifications } from '../services/notifications/notificationService';
+import { configureNotifications, registerForPushNotificationsAsync, scheduleNotifications, sendTestNotification } from '../services/notifications/notificationService';
 import { SavingsProvider } from './contexts/SavingsContext';
-// Import getWallet
 import { getWallet } from '../services/firebase/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 
 // Cấu hình notifications
 Notifications.setNotificationHandler({
@@ -25,36 +27,83 @@ export default function RootLayout() {
   const { user, loading } = useAuth();
 
   useEffect(() => {
-    const checkUserSetup = async () => {
-      if (!loading && user) {
-        try {
-          // Check if user has a wallet
-          const userWallet = await getWallet(user.uid);
+    const checkUserStatus = async () => {
+      if (!loading) {
+        if (user) {
+          // Nếu đã đăng nhập, kiểm tra xem có ví không
+          try {
+            const userWallet = await getWallet(user.uid);
 
-          if (userWallet) {
-            // If wallet exists, go to dashboard
-            router.replace('/components/Dashboard/dashboard');
-          } else {
-            // If no wallet, go to setup wallet screen
-            router.replace('./components/Dashboard/SetupWallet');
+            if (userWallet) {
+              // Nếu có ví, đi đến dashboard
+              router.replace('/components/Dashboard/dashboard');
+            } else {
+              // Nếu không có ví, đi đến trang thiết lập ví
+              router.replace('/components/Dashboard/SetupWallet');
+            }
+          } catch (error) {
+            console.error("Lỗi khi kiểm tra thiết lập người dùng:", error);
+            router.replace('/components/Dashboard/SetupWallet');
           }
-        } catch (error) {
-          console.error("Error checking user setup:", error);
-          // In case of error, default to setup wallet
-          router.replace('./components/Dashboard/SetupWallet');
+        } else {
+          // Nếu chưa đăng nhập, kiểm tra xem có thông tin đăng nhập được lưu không
+          const rememberMe = await AsyncStorage.getItem('rememberMe');
+
+          if (rememberMe === 'true') {
+            // Nếu có thông tin đăng nhập được lưu, đợi xử lý tự động đăng nhập từ useAuth
+            console.log('Đang đợi tự động đăng nhập...');
+            // Không chuyển hướng tại đây, để useAuth xử lý
+          } else {
+            // Nếu không có thông tin đăng nhập được lưu, đi đến trang đăng nhập
+            router.replace('/');
+          }
         }
       }
     };
 
-    checkUserSetup();
+    checkUserStatus();
   }, [user, loading]);
 
   useEffect(() => {
-    // Đăng ký permissions khi app khởi động
-    registerForPushNotificationsAsync();
+    // Cấu hình thông báo khi ứng dụng khởi động
+    async function setupNotifications() {
+      try {
+        const isConfigured = await configureNotifications();
+        if (isConfigured) {
+          console.log('Notifications configured successfully');
 
-    // Lên lịch notifications
-    scheduleNotifications();
+          // Đăng ký quyền đẩy thông báo
+          await registerForPushNotificationsAsync();
+
+          // Lên lịch thông báo
+          await scheduleNotifications();
+
+          // Gửi thông báo test nếu cần
+          // Bỏ comment dòng dưới để test thông báo khi khởi động app
+          // await sendTestNotification();
+        }
+      } catch (error) {
+        console.error('Failed to setup notifications:', error);
+      }
+    }
+
+    setupNotifications();
+
+    // Thêm phần lắng nghe sự kiện thông báo
+    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notification received:', notification);
+    });
+
+    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('Notification response:', response);
+      // Xử lý khi người dùng nhấn vào thông báo
+    });
+
+    return () => {
+      // Dọn dẹp khi unmount
+      Notifications.removeNotificationSubscription(notificationListener);
+      Notifications.removeNotificationSubscription(responseListener);
+    };
   }, []);
 
   return (

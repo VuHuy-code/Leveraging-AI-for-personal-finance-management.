@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
 
 export async function configureNotifications(): Promise<boolean> {
   try {
@@ -165,5 +165,54 @@ export async function checkScheduledNotifications() {
   } catch (error) {
     console.error('Error checking scheduled notifications:', error);
     return [];
+  }
+}
+
+// Kiểm tra và hướng dẫn người dùng bật quyền thông báo trên Android
+export async function checkAndRequestAndroidNotificationPermissions() {
+  if (Platform.OS !== 'android') return true;
+
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+
+    if (status === 'granted') {
+      return true;
+    }
+
+    // Nếu chưa được cấp quyền, yêu cầu quyền
+    const { status: newStatus } = await Notifications.requestPermissionsAsync();
+
+    if (newStatus !== 'granted') {
+      // Nếu vẫn không được cấp quyền, hướng dẫn người dùng vào cài đặt
+      Alert.alert(
+        'Thông báo bị tắt',
+        'Để nhận thông báo nhắc nhở từ ứng dụng, bạn cần bật thông báo trong cài đặt thiết bị.',
+        [
+          {
+            text: 'Đi tới Cài đặt',
+            onPress: () => {
+              // Mở cài đặt ứng dụng
+              if (Platform.OS === 'android') {
+                try {
+                  Linking.openSettings();
+                } catch (err) {
+                  console.error('Không thể mở cài đặt:', err);
+                }
+              }
+            }
+          },
+          {
+            text: 'Để sau',
+            style: 'cancel'
+          }
+        ]
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Lỗi khi kiểm tra quyền thông báo:', error);
+    return false;
   }
 }

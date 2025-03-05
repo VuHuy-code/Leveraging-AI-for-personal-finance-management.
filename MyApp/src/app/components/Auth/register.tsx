@@ -154,7 +154,7 @@ const Register: React.FC = () => {
         await saveUserProfile(uid, name, defaultAvatarUrl);
 
         // Redirect to the dedicated SetupWallet screen instead of wallet modal
-        router.push('./components/Dashboard/SetupWallet');
+        router.push('/components/Dashboard/SetupWallet');
       } else {
         throw new Error('Could not get user ID after registration');
       }

@@ -923,3 +923,113 @@ export const getCategoryTotals = async (userId: string): Promise<CategoryTotal[]
     throw error;
   }
 };
+
+// Add this new function after getExpensesFromCSV
+
+export const updateExpenseInCSV = async (
+  userId: string,
+  timestamp: string,
+  updatedExpense: Expense
+): Promise<void> => {
+  if (!userId) throw new Error('User ID is required');
+
+  // Get the date from the timestamp to determine which file to update
+  const expenseDate = new Date(timestamp);
+  const storagePath = getExpenseStoragePath(userId, expenseDate);
+  const storage = getStorage();
+  const fileRef = ref(storage, storagePath);
+
+  try {
+    // Get existing content
+    const url = await getDownloadURL(fileRef);
+    const response = await fetch(url);
+    const csvContent = await response.text();
+
+    // Parse the CSV to get all expenses for that day
+    const expenses = parseCSVToExpenses(csvContent);
+
+    // Find and replace the specific expense
+    const expenseIndex = expenses.findIndex(exp =>
+      exp.timestamp === timestamp
+    );
+
+    if (expenseIndex === -1) {
+      throw new Error('Transaction not found in CSV file');
+    }
+
+    // Replace the old expense with the updated one
+    expenses[expenseIndex] = updatedExpense;
+
+    // Convert back to CSV
+    const updatedCsvContent = convertExpensesToCSV(expenses, true);
+
+    // Save back to Firebase
+    const blob = new Blob([updatedCsvContent], { type: 'text/csv' });
+    await uploadBytes(fileRef, blob);
+
+    // Update the transaction cache
+    if (transactionCache && transactionCache.userId === userId) {
+      const cachedIndex = transactionCache.transactions.findIndex(exp =>
+        exp.timestamp === timestamp
+      );
+      if (cachedIndex !== -1) {
+        transactionCache.transactions[cachedIndex] = updatedExpense;
+      }
+    }
+
+    // If the category changed, update category totals
+    // This is simplified - in a real app, you'd need to adjust category totals correctly
+    await adjustCategoryTotals(userId, updatedExpense);
+
+    console.log('Transaction updated successfully');
+  } catch (error) {
+    console.error('Error updating transaction in CSV:', error);
+    throw error;
+  }
+};
+
+// Function to adjust category totals when a transaction is updated
+// Improve the adjustCategoryTotals function
+
+export const adjustCategoryTotals = async (
+  userId: string,
+  expense: Expense
+): Promise<void> => {
+  try {
+    // Get current category totals
+    const categoryTotals = await getCategoryTotals(userId);
+
+    // Find the category
+    const categoryIndex = categoryTotals.findIndex(cat => cat.category === expense.category);
+    const amount = parseFloat(expense.amount);
+
+    // Update or create the category totals
+    if (categoryIndex !== -1) {
+      // Update existing category
+      if (expense.type === 'expense') {
+        // Add the transaction amount to the category total
+        categoryTotals[categoryIndex].totalExpense += amount;
+      } else {
+        // Add the transaction amount to the income total
+        categoryTotals[categoryIndex].totalIncome += amount;
+      }
+    } else {
+      // Create new category entry
+      categoryTotals.push({
+        category: expense.category,
+        totalExpense: expense.type === 'expense' ? amount : 0,
+        totalIncome: expense.type === 'income' ? amount : 0
+      });
+    }
+
+    // Save updated totals
+    const storage = getStorage();
+    const fileRef = ref(storage, getCategoryTotalsPath(userId));
+    const blob = new Blob([JSON.stringify(categoryTotals)], { type: 'application/json' });
+    await uploadBytes(fileRef, blob);
+
+  } catch (error) {
+    console.error('Error adjusting category totals:', error);
+    throw error;
+  }
+};

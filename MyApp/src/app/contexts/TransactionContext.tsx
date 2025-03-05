@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 
 interface TransactionContextType {
   refreshKey: number;
@@ -10,15 +10,17 @@ const TransactionContext = createContext<TransactionContextType>({
   refreshTransactions: () => {},
 });
 
-export const TransactionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export function TransactionProvider({ children }: { children: React.ReactNode }) {
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const refreshTransactions = () => {
-    setRefreshKey(prev => prev + 1);
-  };
+  const refreshTransactions = useCallback(() => {
+    setRefreshKey((prev) => prev + 1);
+  }, []);
+
+  const value = { refreshKey, refreshTransactions };
 
   return (
-    <TransactionContext.Provider value={{ refreshKey, refreshTransactions }}>
+    <TransactionContext.Provider value={value}>
       {children}
     </TransactionContext.Provider>
   );

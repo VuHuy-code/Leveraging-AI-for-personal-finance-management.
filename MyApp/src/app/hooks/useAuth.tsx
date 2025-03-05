@@ -3,6 +3,7 @@ import { auth } from '../../services/firebase/auth';
 import { User, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getUserProfile, saveUserProfile} from '../../services/firebase/firestore'; // Import Firestore functions
 import { getWallet } from '../../services/firebase/storage'; // Import getWallet function
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthUser extends User {
   displayName: string | null;
@@ -14,8 +15,27 @@ export const useAuth = () => {
   const [userData, setUserData] = useState<any>(null); // Lưu thông tin người dùng
   const [loading, setLoading] = useState(true);
 
+  // Kiểm tra xem có thông tin đăng nhập được lưu không
+  const checkSavedAuth = async () => {
+    try {
+      const savedEmail = await AsyncStorage.getItem('userEmail');
+      const savedPassword = await AsyncStorage.getItem('userPassword');
+
+      if (savedEmail && savedPassword) {
+        console.log('Tìm thấy thông tin đăng nhập đã lưu, đang tự động đăng nhập...');
+        // Tự động đăng nhập với thông tin đã lưu
+        await login(savedEmail, savedPassword, true);
+      }
+    } catch (error) {
+      console.error('Lỗi khi kiểm tra thông tin đăng nhập đã lưu:', error);
+    }
+  };
+
   // Theo dõi trạng thái đăng nhập và lấy dữ liệu từ Firestore
   useEffect(() => {
+    // Kiểm tra đăng nhập đã lưu khi khởi động
+    checkSavedAuth();
+
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       console.log('Auth state changed:', authUser?.uid);
       if (authUser) {
@@ -58,8 +78,8 @@ export const useAuth = () => {
     }
   };
 
-  // Hàm đăng nhập
-  const login = async (email: string, password: string) => {
+  // Hàm đăng nhập với lựa chọn lưu đăng nhập
+  const login = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       setUser(userCredential.user);
@@ -74,9 +94,17 @@ export const useAuth = () => {
       }
       setUserData(data);
 
-      // Navigation will be handled by _layout.tsx
+      // Lưu thông tin đăng nhập nếu người dùng chọn "Ghi nhớ đăng nhập"
+      if (rememberMe) {
+        await AsyncStorage.setItem('userEmail', email);
+        await AsyncStorage.setItem('userPassword', password);
+        await AsyncStorage.setItem('rememberMe', 'true');
+        console.log('Đã lưu thông tin đăng nhập');
+      }
+
+      return userCredential.user;
     } catch (error) {
-      console.error('Error logging in:', error);
+      console.error('Lỗi khi đăng nhập:', error);
       throw error;
     }
   };
@@ -94,15 +122,21 @@ export const useAuth = () => {
       setUserData(data);
 
       // The navigation will be handled by _layout.tsx through the useEffect
+      return userCredential.user;
     } catch (error) {
       console.error('Error registering:', error);
       throw error;
     }
   };
 
-  // Hàm đăng xuất
+  // Hàm đăng xuất - cập nhật để xóa thông tin đăng nhập đã lưu
   const logout = async () => {
     try {
+      // Xóa thông tin đăng nhập đã lưu
+      await AsyncStorage.removeItem('userEmail');
+      await AsyncStorage.removeItem('userPassword');
+      await AsyncStorage.removeItem('rememberMe');
+
       await signOut(auth);
       setUser(null);
       setUserData(null);
