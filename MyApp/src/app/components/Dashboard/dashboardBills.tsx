@@ -18,15 +18,23 @@ import {
   getMonthlyExpenses,
   getCategoryTotals,
   getWallet,
+  getDailyCategoryTotals,
 } from "../../../services/firebase/storage";
 import { useTransactionContext } from "../../contexts/TransactionContext";
-import Svg, { Circle, G, Path, Defs, LinearGradient as SvgLinearGradient, Stop, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, G, Path, Defs, LinearGradient as SvgLinearGradient, Stop, Text as SvgText, Line} from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
+
 
 interface CategoryTotal {
   category: string;
   totalExpense: number;
   totalIncome: number;
+}
+
+interface DailyCategoryTotal {
+  date: string; // Ngày dưới dạng chuỗi YYYY-MM-DD
+  totalExpense: number; // Tổng chi tiêu trong ngày
+  totalIncome: number; // Tổng thu nhập trong ngày
 }
 
 const MONTHS = [
@@ -390,106 +398,111 @@ const PieChart: React.FC<PieChartProps> = ({ data, totalBalance }) => {
           </SvgText>
         </G>
       </Svg>
+    </View>
+  );
+};
 
-      {/* Legend with improved styling */}
-      <View style={[
-        styles.legendContainer,
-        {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.1,
-          shadowRadius: 6,
-          elevation: 3,
-        }
-      ]}>
-        {data.map((item, index) => {
-          const percentage = ((item.amount / totalBalance) * 100).toFixed(1);
+interface LineChartProps {
+  data: DailyCategoryTotal[];
+  color: string;
+  selectedCategoryDetail: string | null; // Thêm dòng này
+}
 
-          return (
-            <View
-              key={index}
-              style={[
-                styles.legendItem,
-                {
-                  backgroundColor: "rgba(40, 40, 40, 0.3)",
-                  borderRadius: 10,
-                  marginBottom: 8,
-                  padding: 10,
-                  shadowColor: item.color,
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 4,
-                  elevation: 3,
-                  borderWidth: 1,
-                  borderColor: `${item.color}30`,
-                }
-              ]}
-            >
-              <View
-                style={[styles.legendColor, {
-                  backgroundColor: item.color,
-                  borderRadius: 9,
-                  shadowColor: item.color,
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.6,
-                  shadowRadius: 3,
-                  elevation: 3,
-                }]}
-              />
-              <View style={styles.legendTextContainer}>
-                <Text style={[styles.legendCategoryText, { color: "#f5f5f5" }]}>
-                  {item.category}
-                </Text>
-                <Text style={[styles.legendPercentText, { color: "#a8a8a8" }]}>
-                  {percentage}% · {formatCurrency(item.amount)} VNĐ
-                </Text>
-              </View>
-            </View>
-          );
-        })}
+const LineChart: React.FC<LineChartProps> = ({ data, color, selectedCategoryDetail }) => {
+  if (!data || data.length === 0) {
+    return <Text>No data available</Text>;
+  }
 
-        {/* Remaining budget in legend */}
-        {remainingBudget > 0 && (
-          <View
-            style={[
-              styles.legendItem,
-              {
-                backgroundColor: "rgba(40, 40, 40, 0.3)",
-                borderRadius: 10,
-                marginBottom: 8,
-                padding: 10,
-                shadowColor: "#5A5A5C",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.3,
-                shadowRadius: 4,
-                elevation: 3,
-                borderWidth: 1,
-                borderColor: "rgba(90, 90, 92, 0.3)",
-              }
-            ]}
-          >
-            <View
-              style={[styles.legendColor, {
-                backgroundColor: "#3A3A3C",
-                borderRadius: 9,
-                shadowColor: "#5A5A5C",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.6,
-                shadowRadius: 3,
-                elevation: 3,
-              }]}
-            />
-            <View style={styles.legendTextContainer}>
-              <Text style={[styles.legendCategoryText, { color: "#f5f5f5" }]}>
-                Còn lại
-              </Text>
-              <Text style={[styles.legendPercentText, { color: "#a8a8a8" }]}>
-                {((remainingBudget / totalBalance) * 100).toFixed(1)}% · {formatCurrency(remainingBudget)} VNĐ
-              </Text>
-            </View>
-          </View>
+  const chartWidth = width * 0.9; // Chiều rộng của biểu đồ
+  const chartHeight = 200; // Chiều cao của biểu đồ
+  const padding = 20; // Khoảng cách lề
+  const strokeWidth = 2; // Độ dày của đường
+  const dotRadius = 4; // Bán kính của các điểm
+
+  // Lấy giá trị lớn nhất để tính tỷ lệ
+  const maxValue = Math.max(
+    ...data.map((item) => Math.max(item.totalExpense, item.totalIncome)),
+    1 // Đảm bảo maxValue ít nhất là 1 để tránh chia cho 0
+  );
+
+  // Tính toán tỷ lệ để vẽ biểu đồ
+  const scaleY = (value: number) =>
+    chartHeight - padding - (value / maxValue) * (chartHeight - padding * 2);
+
+  // Tạo đường dẫn (path) cho biểu đồ
+  const createPath = (dataKey: keyof DailyCategoryTotal) => {
+    return data
+      .map(
+        (item, index) =>
+          `${(index * chartWidth) / (Math.max(data.length - 1, 1)) + padding},${scaleY(
+            item[dataKey] as number
+          )}`
+      )
+      .join(" ");
+  };
+
+  return (
+    <View style={{ alignItems: "center", marginVertical: 20 }}>
+      <Svg width={chartWidth} height={chartHeight}>
+        {/* Vẽ trục X và trục Y */}
+        <G>
+          {/* Trục X */}
+          <Line
+            x1={padding}
+            y1={chartHeight - padding}
+            x2={chartWidth - padding}
+            y2={chartHeight - padding}
+            stroke="#666"
+            strokeWidth={1}
+          />
+
+          {/* Trục Y */}
+          <Line
+            x1={padding}
+            y1={padding}
+            x2={padding}
+            y2={chartHeight - padding}
+            stroke="#666"
+            strokeWidth={1}
+          />
+        </G>
+
+        {/* Vẽ đường biểu đồ (chỉ vẽ nếu có nhiều hơn một điểm) */}
+        {data.length > 1 && (
+          <Path
+            d={`M${createPath("totalExpense")}`}
+            fill="none"
+            stroke={color}
+            strokeWidth={strokeWidth}
+          />
         )}
-      </View>
+
+        {/* Vẽ các điểm trên biểu đồ */}
+        {data.map((item, index) => (
+          <G key={index}>
+            <SvgText
+              x={(index * chartWidth) / (Math.max(data.length - 1, 1)) + padding}
+              y={chartHeight - padding + 15}
+              fill="#fff"
+              fontSize={10}
+              textAnchor="middle"
+            >
+              {item.date.split("-")[2]} {/* Hiển thị ngày */}
+            </SvgText>
+            <Circle
+              cx={(index * chartWidth) / (Math.max(data.length - 1, 1)) + padding}
+              cy={scaleY(item.totalExpense)}
+              r={dotRadius}
+              fill={color}
+            />
+          </G>
+        ))}
+      </Svg>
+
+      {/* Chú thích */}
+      <Text style={{ color: "#fff", marginTop: 10 }}>
+        Daily Expenses for {selectedCategoryDetail}
+      </Text>
     </View>
   );
 };
@@ -507,25 +520,33 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
   const [monthlyTransactions, setMonthlyTransactions] = useState<any[]>([]);
   const [categoryTotals, setCategoryTotals] = useState<CategoryTotal[]>([]);
   const [totalBalance, setTotalBalance] = useState<number>(0);
+  const [selectedCategoryDetail, setSelectedCategoryDetail] = useState<string | null>(null);
+  const [dailyCategoryData, setDailyCategoryData] = useState<DailyCategoryTotal[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const { refreshKey } = useTransactionContext();
-
+  
   const fetchCategoryTotals = async () => {
     try {
-      const totals = await getCategoryTotals(userData.uid);
+      // Lấy dữ liệu từ totals.json theo tháng và năm được chọn
+      const totals = await getCategoryTotals(userData.uid, new Date(selectedYear, selectedMonth));
+  
+      // Lấy thông tin ví để lấy tổng số dư
       const wallet = await getWallet(userData.uid);
-
+  
+      // Cập nhật state
       setCategoryTotals(totals);
       setTotalBalance(wallet ? wallet.balance : 0);
-      const totalIncome = totals.reduce((sum, category) => sum + category.totalIncome, 0);
-      console.log(`Total income from categories: ${totalIncome} VNĐ`);
+  
+      // Log để kiểm tra dữ liệu
+      console.log(`Total income from categories: ${totals.reduce((sum, category) => sum + category.totalIncome, 0)} VNĐ`);
       console.log(`Total expenses: ${totals.reduce((sum, category) => sum + category.totalExpense, 0)} VNĐ`);
       console.log(`Wallet balance: ${wallet ? wallet.balance : 0} VNĐ`);
-
+  
+      // Animation khi dữ liệu được tải
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 500,
@@ -536,12 +557,12 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
     }
   };
 
-  useEffect(() => {
-    if (activeTab === "monthly") {
-      fadeAnim.setValue(0);
-      fetchCategoryTotals();
-    }
-  }, [activeTab]);
+useEffect(() => {
+  if (activeTab === "monthly") {
+    fetchMonthlyTransactions(selectedMonth, selectedYear);
+    fetchCategoryTotals();
+  }
+}, [activeTab, selectedMonth, selectedYear]);
 
   const scrollToSelectedDay = () => {
     if (scrollViewRef.current) {
@@ -588,15 +609,35 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
 
   const fetchMonthlyTransactions = async (month: number, year: number) => {
     try {
-      const expenses = await getMonthlyExpenses(userData.uid, month, year);
+      const expenses = await getMonthlyExpenses(userData.uid, year, month);
+      console.log("Fetched monthly expenses:", expenses); // Log dữ liệu
       const sortedExpenses = expenses.sort((a, b) => {
-        return (
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        );
+        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
       });
       setMonthlyTransactions(sortedExpenses);
     } catch (error) {
       console.error("Error fetching monthly transactions:", error);
+    }
+  };
+
+  const handleCategoryClick = async (category: string) => {
+    setSelectedCategoryDetail(category);
+  
+    try {
+      // Lấy dữ liệu hàng ngày của danh mục
+      const dailyData = await getDailyCategoryTotals(
+        userData.uid,
+        new Date(selectedYear, selectedMonth),
+        category
+      );
+      setDailyCategoryData(dailyData);
+  
+      // Đảm bảo dữ liệu giao dịch đã được tải
+      if (monthlyTransactions.length === 0) {
+        await fetchMonthlyTransactions(selectedMonth, selectedYear);
+      }
+    } catch (error) {
+      console.error("Error fetching daily category totals:", error);
     }
   };
 
@@ -712,6 +753,83 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
           );
         })}
       </View>
+    );
+  };
+
+  const renderMonthlyStats = () => {
+    // Lọc và chuyển đổi dữ liệu chi tiêu
+    const spendingData = categoryTotals
+      .filter((category) => category.category.toLowerCase() !== "khác" && category.totalExpense > 0)
+      .map((category) => ({
+        category: category.category,
+        amount: category.totalExpense,
+        color: getCategoryColor(category.category),
+      }));
+  
+    // Tính tổng thu nhập
+    const totalIncome = categoryTotals.reduce((sum, category) => sum + category.totalIncome, 0);
+  
+    // Tính tổng chi tiêu
+    const totalExpense = categoryTotals.reduce((sum, category) => sum + category.totalExpense, 0);
+  
+    // Tính số dư còn lại
+    const remainingBalance = totalBalance + totalIncome - totalExpense;
+  
+    // Điều chỉnh tổng số dư để hiển thị trong biểu đồ
+    const adjustedTotalBalance = totalBalance + totalIncome;
+  
+    // Tính phần trăm của số dư còn lại
+    const remainingBalancePercent = ((remainingBalance / adjustedTotalBalance) * 100).toFixed(1);
+  
+    return (
+      <Animated.View style={[styles.monthlyStatsContainer, { opacity: fadeAnim }]}>
+        <LinearGradient
+          colors={["rgba(61, 46, 156, 0.2)", "rgba(40, 40, 40, 0.1)"]}
+          style={styles.balanceContainer}
+        >
+          <View>
+            <Text style={styles.balanceLabel}>Monthly Budget</Text>
+            <Text style={styles.balanceAmount}>{formatCurrency(totalBalance)} VNĐ</Text>
+          </View>
+          {totalIncome > 0 && (
+            <View>
+              <Text style={styles.balanceLabel}>Income This Month</Text>
+              <Text style={styles.balanceAmount}>+{formatCurrency(totalIncome)} VNĐ</Text>
+            </View>
+          )}
+        </LinearGradient>
+  
+        <PieChart data={spendingData} totalBalance={adjustedTotalBalance} />
+        <View style={styles.legendContainer}>
+          {/* Hiển thị các hạng mục chi tiêu */}
+          {spendingData.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.legendItem}
+              onPress={() => handleCategoryClick(item.category)}
+            >
+              <View style={[styles.legendColor, { backgroundColor: item.color }]} />
+              <View style={styles.legendTextContainer}>
+                <Text style={styles.legendCategoryText}>{item.category}</Text>
+                <Text style={styles.legendPercentText}>
+                  {((item.amount / adjustedTotalBalance) * 100).toFixed(1)}% · {formatCurrency(item.amount)} VNĐ
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+  
+          {/* Hiển thị số dư còn lại như một hạng mục, không có tương tác */}
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, { backgroundColor: "#CCCCCC" }]} /> {/* Màu xám hoặc màu bạn chọn */}
+            <View style={styles.legendTextContainer}>
+              <Text style={styles.legendCategoryText}>Còn lại</Text>
+              <Text style={styles.legendPercentText}>
+                {remainingBalancePercent}% · {formatCurrency(remainingBalance)} VNĐ
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Animated.View>
     );
   };
 
@@ -877,82 +995,122 @@ const DashboardBills: React.FC<DashboardProps> = ({ userData }) => {
         </View>
       );
     } else {
-      // Monthly tab render with animation
-      // Only include expense categories in the pie chart data
-      const spendingData = categoryTotals
-        .filter(category =>
-          // Filter out "khác" category AND only include categories that have expenses
-          category.category.toLowerCase() !== "khác" &&
-          category.totalExpense > 0
-        )
-        .map((category) => ({
-          category: category.category,
-          amount: category.totalExpense,
-          color: getCategoryColor(category.category),
-        }));
-
-      // Calculate total income to add to the available balance
-      const totalIncome = categoryTotals.reduce((sum, category) =>
-        sum + category.totalIncome, 0);
-
-      // Add income to totalBalance to correctly reflect available funds
-      const adjustedTotalBalance = totalBalance + totalIncome;
-
       return (
-        <Animated.View
-          style={[styles.monthlyStatsContainer, { opacity: fadeAnim }]}
-        >
-          <LinearGradient
-            colors={["rgba(61, 46, 156, 0.2)", "rgba(40, 40, 40, 0.1)"]}
-            style={[
-              styles.balanceContainer,
-              {
-                borderColor: "rgba(61, 46, 156, 0.2)",
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 4,
-                elevation: 2,
-                marginTop: -10, // Move up a bit
-              },
-            ]}
-          >
-            <View>
-              <Text style={[styles.balanceLabel, { color: "#a8a8a8" }]}>
-                Monthly Budget
-              </Text>
-              <Text
-                style={[
-                  styles.balanceAmount,
-                  { color: "#22c55e", fontWeight: "700" },
-                ]}
-              >
-                {formatCurrency(totalBalance)} VNĐ
-              </Text>
-            </View>
-            {totalIncome > 0 && (
-              <View>
-                <Text style={[styles.balanceLabel, { color: "#a8a8a8", textAlign: 'right' }]}>
-                  Income This Month
-                </Text>
-                <Text
-                  style={[
-                    styles.balanceAmount,
-                    { color: "#22c55e", fontWeight: "700", textAlign: 'right' },
-                  ]}
-                >
-                  +{formatCurrency(totalIncome)} VNĐ
-                </Text>
-              </View>
-            )}
-          </LinearGradient>
-
-          <PieChart data={spendingData} totalBalance={adjustedTotalBalance} />
-        </Animated.View>
+        <>
+          {renderMonthlyStats()}
+          {renderCategoryDetail()}
+        </>
       );
     }
   };
 
+  const renderCategoryDetail = () => {
+    if (!selectedCategoryDetail) return null;
+  
+    const categoryTransactions = monthlyTransactions.filter(
+      (transaction) => transaction.category === selectedCategoryDetail
+    );
+  
+    return (
+      <Modal
+        visible={!!selectedCategoryDetail}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setSelectedCategoryDetail(null)}
+      >
+        <View style={styles.categoryDetailContainer}>
+          <View style={styles.categoryDetailHeader}>
+            <Text style={styles.categoryDetailTitle}>{selectedCategoryDetail}</Text>
+            <TouchableOpacity onPress={() => setSelectedCategoryDetail(null)}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+  
+          <ScrollView style={styles.categoryDetailContent}>
+            {/* Hiển thị biểu đồ đường */}
+            <LineChart
+            data={dailyCategoryData}
+            color={getCategoryColor(selectedCategoryDetail || "")}
+            selectedCategoryDetail={selectedCategoryDetail} // Thêm dòng này
+            />
+              
+            {/* Hiển thị các giao dịch */}
+            <Text style={styles.sectionTitle}>Transactions</Text>
+          {categoryTransactions.length > 0 ? (
+            categoryTransactions.map((transaction, index) => {
+              const isExpense = transaction.type === "expense";
+              const backgroundColor = getCategoryColor(transaction.category);
+
+              return (
+                <View
+                  key={index}
+                  style={[
+                    styles.transactionCard,
+                    {
+                      backgroundColor: "rgba(40, 40, 40, 0.4)",
+                      borderColor: "rgba(61, 46, 156, 0.2)",
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.categoryIcon,
+                      {
+                        backgroundColor: `${backgroundColor}20`,
+                        borderWidth: 1,
+                        borderColor: `${backgroundColor}40`,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={getCategoryIcon(transaction.category)}
+                      size={24}
+                      color={backgroundColor}
+                    />
+                  </View>
+
+                  <View style={styles.transactionDetails}>
+                    <View>
+                      <Text style={styles.transactionTitle}>
+                        {transaction.title || transaction.category}
+                      </Text>
+                      <Text style={styles.transactionTime}>
+                        {formatTime(new Date(transaction.timestamp))}
+                      </Text>
+                    </View>
+
+                    <View style={styles.amountContainer}>
+                      <Text
+                        style={[
+                          styles.transactionAmount,
+                          {
+                            color: isExpense ? "#ef4444" : "#22c55e",
+                            fontWeight: "600",
+                          },
+                        ]}
+                      >
+                        {isExpense ? "-" : "+"}
+                        {formatCurrency(parseFloat(transaction.amount))} VNĐ
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No transactions found</Text>
+              <Text style={styles.emptyStateSubtext}>
+                There are no transactions for this category in the selected month.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+};
+  
   return (
     <>
       <StatusBar
@@ -1882,6 +2040,53 @@ contentSection: {
   flex: 1,
   backgroundColor: "#09090b",
   paddingTop: 20,
+},
+categoryDetailContainer: {
+  flex: 1,
+  backgroundColor: "#1c1c1e",
+  marginTop: 50,
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  padding: 20,
+},
+categoryDetailHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 20,
+},
+categoryDetailTitle: {
+  fontSize: 22,
+  fontWeight: "600",
+  color: "#fff",
+},
+categoryDetailContent: {
+  flex: 1,
+},
+dailyCategoryItem: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: 12,
+  backgroundColor: "rgba(40, 40, 40, 0.4)",
+  borderRadius: 12,
+  marginBottom: 8,
+},
+dailyCategoryDate: {
+  fontSize: 14,
+  color: "#fff",
+  fontWeight: "500",
+},
+dailyCategoryAmounts: {
+  alignItems: "flex-end",
+},
+dailyCategoryExpense: {
+  fontSize: 12,
+  color: "#ef4444",
+},
+dailyCategoryIncome: {
+  fontSize: 12,
+  color: "#22c55e",
 },
 });
 

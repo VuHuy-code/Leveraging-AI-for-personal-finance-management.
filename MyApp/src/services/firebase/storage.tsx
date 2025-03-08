@@ -814,14 +814,23 @@ export const addToSavingGoal = async (userId: string, goalNameOrId: string, amou
   return { success: true, goal: updatedGoal };
 };
 
-interface CategoryTotal {
-  category: string;
+interface DailyCategoryTotal {
+  date: string; // YYYY-MM-DD
   totalExpense: number;
   totalIncome: number;
 }
 
-const getCategoryTotalsPath = (userId: string): string => {
-  return `categoryTotals/${userId}/totals.json`;
+interface CategoryTotal {
+  category: string;
+  dailyTotals: DailyCategoryTotal[]; // Tổng chi tiêu và thu nhập theo ngày
+  totalExpense: number; // Tổng chi tiêu trong tháng
+  totalIncome: number; // Tổng thu nhập trong tháng
+}
+
+const getCategoryTotalsPath = (userId: string, date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `categoryTotals/${userId}/${year}-${month}/totals.json`;
 };
 
 export const updateCategoryTotals = async (
@@ -834,8 +843,9 @@ export const updateCategoryTotals = async (
 ): Promise<void> => {
   if (!userId) throw new Error('User ID is required');
 
+  const expenseDate = new Date(); // Sử dụng ngày hiện tại để xác định tháng và ngày
   const storage = getStorage();
-  const fileRef = ref(storage, getCategoryTotalsPath(userId));
+  const fileRef = ref(storage, getCategoryTotalsPath(userId, expenseDate));
 
   try {
     let existingTotals: CategoryTotal[] = [];
@@ -850,21 +860,56 @@ export const updateCategoryTotals = async (
     }
 
     const amount = parseFloat(expenseData.amount);
+    const dateKey = expenseDate.toISOString().split('T')[0]; // Lấy ngày dưới dạng YYYY-MM-DD
+
     const categoryIndex = existingTotals.findIndex(
       (item) => item.category === expenseData.category
     );
 
     if (categoryIndex !== -1) {
       // Cập nhật tổng chi tiêu hoặc thu nhập nếu danh mục đã tồn tại
-      if (expenseData.type === 'expense') {
-        existingTotals[categoryIndex].totalExpense += amount;
+      const category = existingTotals[categoryIndex];
+
+      // Tìm ngày trong dailyTotals
+      const dailyTotalIndex = category.dailyTotals.findIndex(
+        (daily) => daily.date === dateKey
+      );
+
+      if (dailyTotalIndex !== -1) {
+        // Cập nhật tổng chi tiêu hoặc thu nhập theo ngày
+        if (expenseData.type === 'expense') {
+          category.dailyTotals[dailyTotalIndex].totalExpense += amount;
+          category.totalExpense += amount;
+        } else {
+          category.dailyTotals[dailyTotalIndex].totalIncome += amount;
+          category.totalIncome += amount;
+        }
       } else {
-        existingTotals[categoryIndex].totalIncome += amount;
+        // Thêm mới tổng chi tiêu hoặc thu nhập theo ngày
+        category.dailyTotals.push({
+          date: dateKey,
+          totalExpense: expenseData.type === 'expense' ? amount : 0,
+          totalIncome: expenseData.type === 'income' ? amount : 0,
+        });
+
+        // Cập nhật tổng tháng
+        if (expenseData.type === 'expense') {
+          category.totalExpense += amount;
+        } else {
+          category.totalIncome += amount;
+        }
       }
     } else {
       // Thêm danh mục mới nếu chưa tồn tại
       existingTotals.push({
         category: expenseData.category,
+        dailyTotals: [
+          {
+            date: dateKey,
+            totalExpense: expenseData.type === 'expense' ? amount : 0,
+            totalIncome: expenseData.type === 'income' ? amount : 0,
+          },
+        ],
         totalExpense: expenseData.type === 'expense' ? amount : 0,
         totalIncome: expenseData.type === 'income' ? amount : 0,
       });
@@ -905,16 +950,17 @@ export const getAllExpenses = async (userId: string): Promise<Expense[]> => {
     return [];
   }
 };
-export const getCategoryTotals = async (userId: string): Promise<CategoryTotal[]> => {
+export const getCategoryTotals = async (userId: string, date: Date): Promise<CategoryTotal[]> => {
   if (!userId) throw new Error('User ID is required');
 
   const storage = getStorage();
-  const fileRef = ref(storage, getCategoryTotalsPath(userId));
+  const fileRef = ref(storage, getCategoryTotalsPath(userId, date));
 
   try {
     const url = await getDownloadURL(fileRef);
     const response = await fetch(url);
-    return await response.json();
+    const data = await response.json(); // Parse JSON
+    return data;
   } catch (error: any) {
     if (error.code === 'storage/object-not-found') {
       return [];
@@ -958,6 +1004,7 @@ export const updateExpenseInCSV = async (
     }
 
     // Replace the old expense with the updated one
+    const oldExpense = expenses[expenseIndex];
     expenses[expenseIndex] = updatedExpense;
 
     // Convert back to CSV
@@ -977,13 +1024,108 @@ export const updateExpenseInCSV = async (
       }
     }
 
-    // If the category changed, update category totals
-    // This is simplified - in a real app, you'd need to adjust category totals correctly
-    await adjustCategoryTotals(userId, updatedExpense);
+    // Adjust category totals for the old and new expense
+    await adjustCategoryTotalsForUpdate(userId, oldExpense, updatedExpense);
 
     console.log('Transaction updated successfully');
   } catch (error) {
     console.error('Error updating transaction in CSV:', error);
+    throw error;
+  }
+};
+
+// Helper function to adjust category totals when an expense is updated
+const adjustCategoryTotalsForUpdate = async (
+  userId: string,
+  oldExpense: Expense,
+  newExpense: Expense
+): Promise<void> => {
+  try {
+    const oldDate = new Date(oldExpense.timestamp);
+    const newDate = new Date(newExpense.timestamp);
+
+    // If the date has changed, we need to adjust totals for both months
+    if (oldDate.getMonth() !== newDate.getMonth() || oldDate.getFullYear() !== newDate.getFullYear()) {
+      // Remove the old expense from the old month's totals
+      await adjustCategoryTotalsForRemoval(userId, oldExpense);
+
+      // Add the new expense to the new month's totals
+      await adjustCategoryTotals(userId, newExpense);
+    } else {
+      // If the date is the same, just adjust the totals for that month
+      const categoryTotals = await getCategoryTotals(userId, newDate);
+
+      // Find the old category and subtract the old amount
+      const oldCategoryIndex = categoryTotals.findIndex(cat => cat.category === oldExpense.category);
+      if (oldCategoryIndex !== -1) {
+        if (oldExpense.type === 'expense') {
+          categoryTotals[oldCategoryIndex].totalExpense -= parseFloat(oldExpense.amount);
+        } else {
+          categoryTotals[oldCategoryIndex].totalIncome -= parseFloat(oldExpense.amount);
+        }
+      }
+
+      // Find the new category and add the new amount
+      const newCategoryIndex = categoryTotals.findIndex(cat => cat.category === newExpense.category);
+      if (newCategoryIndex !== -1) {
+        if (newExpense.type === 'expense') {
+          categoryTotals[newCategoryIndex].totalExpense += parseFloat(newExpense.amount);
+        } else {
+          categoryTotals[newCategoryIndex].totalIncome += parseFloat(newExpense.amount);
+        }
+      } else {
+        // If the category is new, add it to the list with an empty dailyTotals array
+        categoryTotals.push({
+          category: newExpense.category,
+          totalExpense: newExpense.type === 'expense' ? parseFloat(newExpense.amount) : 0,
+          totalIncome: newExpense.type === 'income' ? parseFloat(newExpense.amount) : 0,
+          dailyTotals: [] // Thêm thuộc tính dailyTotals với giá trị mảng rỗng
+        });
+      }
+
+      // Save the updated totals
+      const storage = getStorage();
+      const fileRef = ref(storage, getCategoryTotalsPath(userId, newDate));
+      const blob = new Blob([JSON.stringify(categoryTotals)], { type: 'application/json' });
+      await uploadBytes(fileRef, blob);
+    }
+  } catch (error) {
+    console.error('Error adjusting category totals for update:', error);
+    throw error;
+  }
+};
+
+// Helper function to adjust category totals when an expense is removed
+const adjustCategoryTotalsForRemoval = async (
+  userId: string,
+  expense: Expense
+): Promise<void> => {
+  try {
+    const expenseDate = new Date(expense.timestamp);
+    const categoryTotals = await getCategoryTotals(userId, expenseDate);
+
+    // Find the category and subtract the amount
+    const categoryIndex = categoryTotals.findIndex(cat => cat.category === expense.category);
+    if (categoryIndex !== -1) {
+      if (expense.type === 'expense') {
+        categoryTotals[categoryIndex].totalExpense -= parseFloat(expense.amount);
+      } else {
+        categoryTotals[categoryIndex].totalIncome -= parseFloat(expense.amount);
+      }
+
+      // If the total for the category is zero, remove it from the list
+      if (categoryTotals[categoryIndex].totalExpense === 0 && categoryTotals[categoryIndex].totalIncome === 0) {
+        categoryTotals.splice(categoryIndex, 1);
+      }
+
+      // Save the updated totals
+      const storage = getStorage();
+      const fileRef = ref(storage, getCategoryTotalsPath(userId, expenseDate));
+      const blob = new Blob([JSON.stringify(categoryTotals)], { type: 'application/json' });
+      await uploadBytes(fileRef, blob);
+    }
+  } catch (error) {
+    console.error('Error adjusting category totals for removal:', error);
     throw error;
   }
 };
@@ -996,8 +1138,8 @@ export const adjustCategoryTotals = async (
   expense: Expense
 ): Promise<void> => {
   try {
-    // Get current category totals
-    const categoryTotals = await getCategoryTotals(userId);
+    const expenseDate = new Date(expense.timestamp); // Sử dụng ngày của giao dịch để xác định tháng
+    const categoryTotals = await getCategoryTotals(userId, expenseDate);
 
     // Find the category
     const categoryIndex = categoryTotals.findIndex(cat => cat.category === expense.category);
@@ -1018,13 +1160,14 @@ export const adjustCategoryTotals = async (
       categoryTotals.push({
         category: expense.category,
         totalExpense: expense.type === 'expense' ? amount : 0,
-        totalIncome: expense.type === 'income' ? amount : 0
+        totalIncome: expense.type === 'income' ? amount : 0,
+        dailyTotals: [] // Thêm thuộc tính dailyTotals với giá trị mảng rỗng
       });
     }
 
     // Save updated totals
     const storage = getStorage();
-    const fileRef = ref(storage, getCategoryTotalsPath(userId));
+    const fileRef = ref(storage, getCategoryTotalsPath(userId, expenseDate));
     const blob = new Blob([JSON.stringify(categoryTotals)], { type: 'application/json' });
     await uploadBytes(fileRef, blob);
 
@@ -1032,4 +1175,19 @@ export const adjustCategoryTotals = async (
     console.error('Error adjusting category totals:', error);
     throw error;
   }
+};
+
+export const getDailyCategoryTotals = async (
+  userId: string,
+  date: Date,
+  category: string
+): Promise<DailyCategoryTotal[]> => {
+  const categoryTotals = await getCategoryTotals(userId, date);
+  const categoryData = categoryTotals.find((cat) => cat.category === category);
+
+  if (categoryData) {
+    return categoryData.dailyTotals;
+  }
+
+  return [];
 };
