@@ -416,6 +416,8 @@ const LineChart: React.FC<LineChartProps> = ({ data, color, selectedCategoryDeta
   const chartWidth = width * 0.9; // Chiều rộng của biểu đồ
   const chartHeight = 200; // Chiều cao của biểu đồ
   const padding = 20; // Khoảng cách lề
+  const leftPadding = 40; // Tăng padding bên trái để nhãn số tiền không bị che
+  const rightPadding = 30; // Thêm padding bên phải để ngày cuối không bị khuất
   const strokeWidth = 2; // Độ dày của đường
   const dotRadius = 4; // Bán kính của các điểm
 
@@ -425,18 +427,59 @@ const LineChart: React.FC<LineChartProps> = ({ data, color, selectedCategoryDeta
     1 // Đảm bảo maxValue ít nhất là 1 để tránh chia cho 0
   );
 
+  // Tính toán các mức giá trị trên trục Y (chia tương tự như trục X)
+  const calculateYLevels = (maxValue: number) => {
+    const levels = [];
+    let step;
+
+    if (maxValue >= 1000000) {
+      step = 1000000; // Bước nhảy 1 triệu nếu giá trị lớn nhất >= 1 triệu
+    } else if (maxValue >= 500000) {
+      step = 100000; // Bước nhảy 100 nghìn nếu giá trị lớn nhất >= 500 nghìn
+    } else if (maxValue >= 100000) {
+      step = 50000; // Bước nhảy 50 nghìn nếu giá trị lớn nhất >= 100 nghìn
+    } else {
+      step = 10000; // Bước nhảy 10 nghìn cho các trường hợp nhỏ hơn
+    }
+
+    for (let i = 0; i <= maxValue; i += step) {
+      levels.push(i);
+    }
+
+    return levels;
+  };
+
+  const yLevels = calculateYLevels(maxValue);
+
   // Tính toán tỷ lệ để vẽ biểu đồ
   const scaleY = (value: number) =>
     chartHeight - padding - (value / maxValue) * (chartHeight - padding * 2);
 
+  // Lấy ngày hiện tại
+  const currentDate = new Date();
+  const currentDay = currentDate.getDate();
+  const currentMonth = currentDate.getMonth();
+  const currentYear = currentDate.getFullYear();
+
+  // Lọc dữ liệu chỉ đến ngày hiện tại
+  const filteredData = data.filter((item) => {
+    const day = parseInt(item.date.split("-")[2], 10);
+    return day <= currentDay;
+  });
+
+  // Tính toán khoảng cách giữa các điểm trên trục X
+  const calculateXPosition = (index: number) => {
+    const totalDays = currentDay; // Số ngày từ ngày 1 đến ngày hiện tại
+    const availableWidth = chartWidth - leftPadding - rightPadding; // Chiều rộng khả dụng sau khi trừ padding
+    return (index * availableWidth) / (totalDays - 1) + leftPadding;
+  };
+
   // Tạo đường dẫn (path) cho biểu đồ
   const createPath = (dataKey: keyof DailyCategoryTotal) => {
-    return data
+    return filteredData
       .map(
         (item, index) =>
-          `${(index * chartWidth) / (Math.max(data.length - 1, 1)) + padding},${scaleY(
-            item[dataKey] as number
-          )}`
+          `${calculateXPosition(index)},${scaleY(item[dataKey] as number)}`
       )
       .join(" ");
   };
@@ -448,9 +491,9 @@ const LineChart: React.FC<LineChartProps> = ({ data, color, selectedCategoryDeta
         <G>
           {/* Trục X */}
           <Line
-            x1={padding}
+            x1={leftPadding}
             y1={chartHeight - padding}
-            x2={chartWidth - padding}
+            x2={chartWidth - rightPadding} // Điều chỉnh trục X để không vượt quá padding bên phải
             y2={chartHeight - padding}
             stroke="#666"
             strokeWidth={1}
@@ -458,17 +501,44 @@ const LineChart: React.FC<LineChartProps> = ({ data, color, selectedCategoryDeta
 
           {/* Trục Y */}
           <Line
-            x1={padding}
+            x1={leftPadding}
             y1={padding}
-            x2={padding}
+            x2={leftPadding}
             y2={chartHeight - padding}
             stroke="#666"
             strokeWidth={1}
           />
+
+          {/* Vẽ các mức giá trị trên trục Y */}
+          {yLevels.map((level, index) => (
+            <G key={index}>
+              {/* Đường ngang */}
+              <Line
+                x1={leftPadding}
+                y1={scaleY(level)}
+                x2={chartWidth - rightPadding}
+                y2={scaleY(level)}
+                stroke="#666"
+                strokeWidth={0.5}
+                strokeDasharray="2 2" // Đường đứt nét
+              />
+
+              {/* Nhãn giá trị */}
+              <SvgText
+                x={leftPadding - 5} // Đưa nhãn vào trong một chút
+                y={scaleY(level) + 5}
+                fill="#fff"
+                fontSize={10}
+                textAnchor="end"
+              >
+                {level.toLocaleString()} {/* Bỏ chữ 'đ' */}
+              </SvgText>
+            </G>
+          ))}
         </G>
 
         {/* Vẽ đường biểu đồ (chỉ vẽ nếu có nhiều hơn một điểm) */}
-        {data.length > 1 && (
+        {filteredData.length > 1 && (
           <Path
             d={`M${createPath("totalExpense")}`}
             fill="none"
@@ -478,25 +548,32 @@ const LineChart: React.FC<LineChartProps> = ({ data, color, selectedCategoryDeta
         )}
 
         {/* Vẽ các điểm trên biểu đồ */}
-        {data.map((item, index) => (
-          <G key={index}>
-            <SvgText
-              x={(index * chartWidth) / (Math.max(data.length - 1, 1)) + padding}
-              y={chartHeight - padding + 15}
-              fill="#fff"
-              fontSize={10}
-              textAnchor="middle"
-            >
-              {item.date.split("-")[2]} {/* Hiển thị ngày */}
-            </SvgText>
-            <Circle
-              cx={(index * chartWidth) / (Math.max(data.length - 1, 1)) + padding}
-              cy={scaleY(item.totalExpense)}
-              r={dotRadius}
-              fill={color}
-            />
-          </G>
-        ))}
+        {filteredData.map((item, index) => {
+          const day = parseInt(item.date.split("-")[2], 10); // Lấy ngày từ chuỗi date
+
+          // Hiển thị nhãn cho các ngày chia hết cho 5 hoặc là ngày hiện tại
+          const label = day % 5 === 0 || day === currentDay ? day.toString() : "|";
+
+          return (
+            <G key={index}>
+              <SvgText
+                x={calculateXPosition(index)}
+                y={chartHeight - padding + 15}
+                fill="#fff"
+                fontSize={10}
+                textAnchor="middle"
+              >
+                {label}
+              </SvgText>
+              <Circle
+                cx={calculateXPosition(index)}
+                cy={scaleY(item.totalExpense)}
+                r={dotRadius}
+                fill={color}
+              />
+            </G>
+          );
+        })}
       </Svg>
 
       {/* Chú thích */}
@@ -590,6 +667,7 @@ useEffect(() => {
     try {
       fadeAnim.setValue(0);
       const expenses = await getDailyExpenses(userData.uid, date);
+      console.log("Daily Expenses:", expenses);
       const sortedExpenses = expenses.sort((a, b) => {
         return (
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
@@ -610,6 +688,7 @@ useEffect(() => {
   const fetchMonthlyTransactions = async (month: number, year: number) => {
     try {
       const expenses = await getMonthlyExpenses(userData.uid, year, month);
+      console.log("Monthly Expenses:", expenses);
       console.log("Fetched monthly expenses:", expenses); // Log dữ liệu
       const sortedExpenses = expenses.sort((a, b) => {
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
@@ -630,7 +709,10 @@ useEffect(() => {
         new Date(selectedYear, selectedMonth),
         category
       );
-      setDailyCategoryData(dailyData);
+  
+      // Tạo dữ liệu cho từng ngày trong tháng
+      const fullMonthData = generateDailyDataForMonth(selectedYear, selectedMonth, dailyData);
+      setDailyCategoryData(fullMonthData);
   
       // Đảm bảo dữ liệu giao dịch đã được tải
       if (monthlyTransactions.length === 0) {
@@ -1004,38 +1086,66 @@ useEffect(() => {
     }
   };
 
+  const generateDailyDataForMonth = (year: number, month: number, dailyData: DailyCategoryTotal[]) => {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const dailyDataMap = new Map<string, DailyCategoryTotal>();
+  
+    // Tạo một map từ dữ liệu hàng ngày để dễ dàng truy cập
+    dailyData.forEach((item) => {
+      dailyDataMap.set(item.date, item);
+    });
+  
+    // Tạo mảng dữ liệu cho từng ngày trong tháng
+    const result: DailyCategoryTotal[] = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const existingData = dailyDataMap.get(date);
+      result.push({
+        date,
+        totalExpense: existingData ? existingData.totalExpense : 0,
+        totalIncome: existingData ? existingData.totalIncome : 0,
+      });
+    }
+  
+    return result;
+  };
+  
   const renderCategoryDetail = () => {
-    if (!selectedCategoryDetail) return null;
-  
-    const categoryTransactions = monthlyTransactions.filter(
-      (transaction) => transaction.category === selectedCategoryDetail
-    );
-  
-    return (
-      <Modal
-        visible={!!selectedCategoryDetail}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setSelectedCategoryDetail(null)}
-      >
-        <View style={styles.categoryDetailContainer}>
-          <View style={styles.categoryDetailHeader}>
-            <Text style={styles.categoryDetailTitle}>{selectedCategoryDetail}</Text>
-            <TouchableOpacity onPress={() => setSelectedCategoryDetail(null)}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-  
-          <ScrollView style={styles.categoryDetailContent}>
-            {/* Hiển thị biểu đồ đường */}
-            <LineChart
+  if (!selectedCategoryDetail) return null;
+
+  // Lọc các giao dịch trong tháng của danh mục được chọn
+  const categoryTransactions = monthlyTransactions.filter(
+    (transaction) => transaction.category === selectedCategoryDetail
+  );
+  console.log(monthlyTransactions);
+  // Console log các giao dịch thuộc danh mục được chọn
+  console.log("Category Transactions for", selectedCategoryDetail, ":", categoryTransactions);
+
+  return (
+    <Modal
+      visible={!!selectedCategoryDetail}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => setSelectedCategoryDetail(null)}
+    >
+      <View style={styles.categoryDetailContainer}>
+        <View style={styles.categoryDetailHeader}>
+          <Text style={styles.categoryDetailTitle}>{selectedCategoryDetail}</Text>
+          <TouchableOpacity onPress={() => setSelectedCategoryDetail(null)}>
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.categoryDetailContent}>
+          {/* Hiển thị biểu đồ đường */}
+          <LineChart
             data={dailyCategoryData}
             color={getCategoryColor(selectedCategoryDetail || "")}
-            selectedCategoryDetail={selectedCategoryDetail} // Thêm dòng này
-            />
-              
-            {/* Hiển thị các giao dịch */}
-            <Text style={styles.sectionTitle}>Transactions</Text>
+            selectedCategoryDetail={selectedCategoryDetail}
+          />
+
+          {/* Hiển thị các giao dịch */}
+          <Text style={styles.sectionTitle}>Transactions</Text>
           {categoryTransactions.length > 0 ? (
             categoryTransactions.map((transaction, index) => {
               const isExpense = transaction.type === "expense";
@@ -1710,11 +1820,6 @@ transactionsHeader: {
   alignItems: "center",
   marginBottom: 20,
 },
-sectionTitle: {
-  fontSize: 20,
-  fontWeight: "600",
-  color: "#fff",
-},
 transactionCard: {
   flexDirection: "row",
   backgroundColor: "rgba(40, 40, 40, 0.4)",
@@ -2041,28 +2146,6 @@ contentSection: {
   backgroundColor: "#09090b",
   paddingTop: 20,
 },
-categoryDetailContainer: {
-  flex: 1,
-  backgroundColor: "#1c1c1e",
-  marginTop: 50,
-  borderTopLeftRadius: 20,
-  borderTopRightRadius: 20,
-  padding: 20,
-},
-categoryDetailHeader: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 20,
-},
-categoryDetailTitle: {
-  fontSize: 22,
-  fontWeight: "600",
-  color: "#fff",
-},
-categoryDetailContent: {
-  flex: 1,
-},
 dailyCategoryItem: {
   flexDirection: "row",
   justifyContent: "space-between",
@@ -2087,6 +2170,34 @@ dailyCategoryExpense: {
 dailyCategoryIncome: {
   fontSize: 12,
   color: "#22c55e",
+},
+categoryDetailContainer: {
+  flex: 1,
+  backgroundColor: "#1c1c1e",
+  marginTop: 50,
+  borderTopLeftRadius: 20,
+  borderTopRightRadius: 20,
+  padding: 20,
+},
+categoryDetailHeader: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 20,
+},
+categoryDetailTitle: {
+  fontSize: 22,
+  fontWeight: "600",
+  color: "#fff",
+},
+categoryDetailContent: {
+  flex: 1,
+},
+sectionTitle: {
+  fontSize: 18,
+  fontWeight: "600",
+  color: "#fff",
+  marginBottom: 16,
 },
 });
 

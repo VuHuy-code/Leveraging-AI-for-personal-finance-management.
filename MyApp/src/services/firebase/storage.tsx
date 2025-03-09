@@ -146,17 +146,26 @@ export const getMonthlyExpenses = async (
   year: number,
   month: number
 ): Promise<Expense[]> => {
-  const startDate = new Date(year, month - 1, 1);
-  const endDate = new Date(year, month, 0); // Last day of month
+  // Xác định ngày đầu tiên và ngày cuối cùng của tháng
+  const startDate = new Date(year, month, 1); // Ngày đầu tiên của tháng
+  const endDate = new Date(year, month, 31); // Ngày cuối cùng của tháng
 
+  // Lấy tất cả các file CSV trong khoảng thời gian từ startDate đến endDate
   const fileUrls = await getCSVFilesInRange(userId, startDate, endDate);
+
+  // Tạo một mảng để lưu trữ tất cả các chi tiêu
   const allExpenses: Expense[] = [];
 
+  // Lặp qua từng file CSV và tổng hợp chi tiêu
   for (const url of fileUrls) {
-    const response = await fetch(url);
-    const csvContent = await response.text();
-    const expenses = parseCSVToExpenses(csvContent);
-    allExpenses.push(...expenses);
+    try {
+      const response = await fetch(url);
+      const csvContent = await response.text();
+      const expenses = parseCSVToExpenses(csvContent);
+      allExpenses.push(...expenses);
+    } catch (error) {
+      console.error(`Error fetching or parsing CSV from ${url}:`, error);
+    }
   }
 
   return allExpenses;
